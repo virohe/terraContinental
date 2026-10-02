@@ -1,0 +1,10 @@
+{
+  "_comment": "Vanilla ridge noise wrapped with configurable frequency scale from TerraConfig.WEIRDNESS_SCALE. Scale 1.0 = vanilla. Lower = wider biome bands.",
+  "type": "terra_continental:scaled_weirdness",
+  "argument": {
+    "type": "minecraft:noise",
+    "noise": "minecraft:ridge",
+    "xz_scale": 0.025,
+    "y_scale": 0.0
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "_comment": "CAVE BIOME DEPTH BANDING. Vanilla registers surface biomes at depth point(0.0) AND point(1.0), deep_dark at point(1.1), and the dedicated underground biomes (dripstone_caves, lush_caves) across span(0.2, 0.9); selection is NEAREST box. Tectonic's version is min(tectonic:depth, 0.8 above y=32 else 1.3), and that flat 1.3 pins biome-depth for the whole lower world - 1.3 is nearer deep_dark's 1.1 than the surface biomes' 1.0, so deep_dark wins every column whose erosion is in band while the 0.2-0.9 window becomes unreachable. Measured before this fix: deep_dark a flat 15.7% from y=-128 to bedrock, dripstone 0% below y=-32, lush 0% everywhere. terra_continental:cave_depth replaces the raw input with a linear rescale (vanilla's depth is linear in Y too) whose scale is DERIVED from the world's real vertical extent - it reads Tectonic's own min_y from config/tectonic.json - so changing min_y, max_y or vertical_scale rescales the bands automatically instead of needing hand-edited spline points. Tuning knobs live in terra_continental-common.toml under [caves]. The outer min() is Tectonic's own and is kept verbatim: the 0.8 arm above y=32 stops deep interiors of very tall terrain (vertical_scale is 5.0+) from reading as deep_dark, and the 1.3 arm bounds the deep_dark band at the floor. Terrain is unaffected - initial_density_without_jaggedness, sloped_cheese and factor all read tectonic:depth directly, and nothing but the noise_settings router reads this file.",
+  "type": "minecraft:min",
+  "argument1": {
+    "type": "minecraft:mul",
+    "argument1": "tectonic:depth",
+    "argument2": 0.42
+  },
+  "argument2": {
+    "type": "minecraft:range_choice",
+    "input": "minecraft:y",
+    "min_inclusive": 32,
+    "max_exclusive": 2048,
+    "when_in_range": 0.8,
+    "when_out_of_range": 1.6
+  }
+}

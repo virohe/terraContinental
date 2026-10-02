@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:flat_cache",
+  "argument": {
+    "type": "minecraft:noise",
+    "noise": "terra_continental:river_main",
+    "xz_scale": 0.005,
+    "y_scale": 0.0
+  }
+}

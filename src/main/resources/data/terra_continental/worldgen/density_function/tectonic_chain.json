@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:flat_cache",
+  "argument": {
+    "type": "minecraft:mul",
+    "argument1": "terra_continental:tectonic_ridge",
+    "argument2": {
+      "type": "minecraft:clamp",
+      "input": {
+        "type": "minecraft:mul",
+        "argument1": 2.5,
+        "argument2": {
+          "type": "minecraft:add",
+          "argument1": 0.1,
+          "argument2": "terra_continental:tectonic_segments"
+        }
+      },
+      "min": 0.0,
+      "max": 1.0
+    }
+  }
+}

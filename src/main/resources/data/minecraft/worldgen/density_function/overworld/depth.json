@@ -1,0 +1,60 @@
+{
+  "_comment": "INTENTIONAL minecraft namespace override. Affects ALL dimension presets (default, large_biomes, amplified). Installing alongside Tectonic, Terralith, or any other worldgen mod that overrides this file will conflict silently by datapack load order. Creating a vanilla Default world with this mod installed will produce Terra Continental terrain.",
+  "type": "minecraft:add",
+  "argument1": {
+    "type": "minecraft:add",
+    "argument1": {
+      "type": "minecraft:add",
+      "argument1": {
+        "type": "minecraft:y_clamped_gradient",
+        "from_y": -64,
+        "to_y": 320,
+        "from_value": 1.5,
+        "to_value": -1.5
+      },
+      "argument2": "minecraft:overworld/offset"
+    },
+    "argument2": "terra_continental:waterfall_step"
+  },
+  "argument2": {
+    "type": "minecraft:mul",
+    "argument1": -0.075,
+    "argument2": {
+      "type": "minecraft:mul",
+      "argument1": {
+        "type": "minecraft:square",
+        "argument": {
+          "type": "minecraft:clamp",
+          "input": {
+            "type": "minecraft:add",
+            "argument1": 1.0,
+            "argument2": {
+              "type": "minecraft:mul",
+              "argument1": -12.5,
+              "argument2": {
+                "type": "minecraft:abs",
+                "argument": "minecraft:overworld/ridges"
+              }
+            }
+          },
+          "min": 0.0,
+          "max": 1.0
+        }
+      },
+      "argument2": {
+        "type": "minecraft:clamp",
+        "input": {
+          "type": "minecraft:mul",
+          "argument1": 6.0,
+          "argument2": {
+            "type": "minecraft:add",
+            "argument1": 0.15,
+            "argument2": "minecraft:overworld/continents"
+          }
+        },
+        "min": 0.0,
+        "max": 1.0
+      }
+    }
+  }
+}

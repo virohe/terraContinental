@@ -1,0 +1,11 @@
+{
+  "structures": [
+    { "structure": "minecraft:mansion", "weight": 1 }
+  ],
+  "placement": {
+    "type": "minecraft:random_spread",
+    "spacing": 80,
+    "separation": 20,
+    "salt": 10387319
+  }
+}

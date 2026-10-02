@@ -1,0 +1,12 @@
+{
+  "structures": [
+    { "structure": "minecraft:monument", "weight": 1 }
+  ],
+  "placement": {
+    "type": "minecraft:random_spread",
+    "spread_type": "triangular",
+    "spacing": 32,
+    "separation": 5,
+    "salt": 10387313
+  }
+}

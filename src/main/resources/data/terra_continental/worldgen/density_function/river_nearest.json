@@ -1,0 +1,73 @@
+{
+  "type": "minecraft:flat_cache",
+  "argument": {
+    "type": "minecraft:range_choice",
+    "input": {
+      "type": "minecraft:add",
+      "argument1": {
+        "type": "minecraft:add",
+        "argument1": {
+          "type": "minecraft:mul",
+          "argument1": 14.0,
+          "argument2": {
+            "type": "minecraft:abs",
+            "argument": "terra_continental:river_creek"
+          }
+        },
+        "argument2": {
+          "type": "minecraft:add",
+          "argument1": {
+            "type": "minecraft:clamp",
+            "input": {
+              "type": "minecraft:mul",
+              "argument1": 300.0,
+              "argument2": {
+                "type": "minecraft:add",
+                "argument1": -0.1,
+                "argument2": {
+                  "type": "minecraft:abs",
+                  "argument": "terra_continental:river_tributary"
+                }
+              }
+            },
+            "min": 0.0,
+            "max": 30.0
+          },
+          "argument2": {
+            "type": "minecraft:clamp",
+            "input": {
+              "type": "minecraft:mul",
+              "argument1": 200.0,
+              "argument2": {
+                "type": "minecraft:add",
+                "argument1": -0.15,
+                "argument2": {
+                  "type": "minecraft:abs",
+                  "argument": "terra_continental:river_main"
+                }
+              }
+            },
+            "min": 0.0,
+            "max": 30.0
+          }
+        }
+      },
+      "argument2": {
+        "type": "minecraft:mul",
+        "argument1": -1.0,
+        "argument2": {
+          "type": "minecraft:abs",
+          "argument": "terra_continental:river_mt"
+        }
+      }
+    },
+    "min_inclusive": -1000000.0,
+    "max_exclusive": 0.0,
+    "when_in_range": {
+      "type": "minecraft:mul",
+      "argument1": 19.0,
+      "argument2": "terra_continental:river_creek"
+    },
+    "when_out_of_range": "terra_continental:river_mt"
+  }
+}

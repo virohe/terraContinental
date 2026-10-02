@@ -1,0 +1,18 @@
+{
+  "_comment": "TEMPERATE SPAWN CONTINENT. Tectonic's version of this file is add(0, minecraft:overworld/temperature), which resolves to its config noise - so continent-sized that a whole spawn continent can come out in one band (99.5% frozen on the seed that prompted this). This blends toward Terra Continental's temperate climate (terra_continental:temperature_temperate = 0.4 x a finer temperature noise: mostly temperate, some cool and warm pockets) by terra_continental:spawn_climate_mask, which is 1 across the spawn continent and fades to 0 beyond it: t + mask * (temperate - t). Every other continent keeps Tectonic's climate. Biome selection only; terrain never reads temperature. Strength and radii: [biomes] temperate_spawn_* in terra_continental-common.toml.",
+  "type": "minecraft:add",
+  "argument1": "minecraft:overworld/temperature",
+  "argument2": {
+    "type": "minecraft:mul",
+    "argument1": { "type": "terra_continental:spawn_climate_mask" },
+    "argument2": {
+      "type": "minecraft:add",
+      "argument1": "terra_continental:temperature_temperate",
+      "argument2": {
+        "type": "minecraft:mul",
+        "argument1": -1.0,
+        "argument2": "minecraft:overworld/temperature"
+      }
+    }
+  }
+}

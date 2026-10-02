@@ -1,0 +1,8 @@
+{
+  "_comment": "INTENTIONAL MINECRAFT NAMESPACE OVERRIDE: This file is in the minecraft namespace so it applies to all dimension presets (default, large_biomes, amplified). Installing alongside other worldgen mods (Tectonic, Terralith, etc.) will conflict silently by datapack load order. See COMPATIBILITY.md.",
+  "type": "minecraft:flat_cache",
+  "argument": {
+    "type": "minecraft:cache_2d",
+    "argument": "terra_continental:continent_inland_stretch"
+  }
+}

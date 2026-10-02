@@ -1,0 +1,34 @@
+{
+  "_comment": "Rescales the inland portion of continentalness output to restore vanilla underground biome bands. Our ocean_bias compresses inland C values into ~(-0.11, +0.68); this spline stretches that range back to (-0.11, +1.0) so dripstone_caves and lush_caves compete correctly. Ocean/coast values (<= -0.11) are unchanged.",
+  "type": "minecraft:spline",
+  "spline": {
+    "coordinate": "terra_continental:radial_continent_mask",
+    "points": [
+      {
+        "location": -1.5,
+        "value": -1.5,
+        "derivative": 1.0
+      },
+      {
+        "location": -0.19,
+        "value": -0.19,
+        "derivative": 1.0
+      },
+      {
+        "location": -0.11,
+        "value": -0.11,
+        "derivative": 1.5
+      },
+      {
+        "location": 0.35,
+        "value": 0.55,
+        "derivative": 1.5
+      },
+      {
+        "location": 0.68,
+        "value": 1.0,
+        "derivative": 0.5
+      }
+    ]
+  }
+}

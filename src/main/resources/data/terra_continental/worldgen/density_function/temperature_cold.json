@@ -1,0 +1,5 @@
+{
+  "type": "minecraft:add",
+  "argument1": "terra_continental:temperature_base",
+  "argument2": -0.5
+}

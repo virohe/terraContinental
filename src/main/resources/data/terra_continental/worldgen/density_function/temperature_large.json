@@ -1,0 +1,10 @@
+{
+  "_comment": "Large biomes variant of temperature: xz_scale halved (0.05 → 0.025) for wider temperature bands.",
+  "type": "minecraft:shifted_noise",
+  "noise": "minecraft:temperature",
+  "shift_x": "minecraft:shift_x",
+  "shift_y": 0.0,
+  "shift_z": "minecraft:shift_z",
+  "xz_scale": 0.025,
+  "y_scale": 0.0
+}

@@ -1,0 +1,5 @@
+{
+  "_comment": "Keep BIOME continentalness on Terra Continental's radial system even with Tectonic enabled. Tectonic's built-in pack also overrides minecraft:overworld/continents (-> its full_continents); this world datapack loads last and wins, so biome placement stays radial and the Python simulator remains a valid map oracle. Terrain height comes from the raw_continents seam; biome continentalness comes from here. They are allowed to be different functions.",
+  "type": "minecraft:flat_cache",
+  "argument": "terra_continental:radial_continent_mask"
+}

@@ -1,0 +1,13 @@
+{
+  "_comment": "mushroom_dip is the only path by which continentalness drops below the continent_base floor of -1.02 (which sits above the vanilla mushroom_fields upper edge of -1.05). mushroom_dip fires only at tectonic ridge tips (tectonic_potential near 0) that are also deep ocean (continent_base < -0.75) and on the far-side tectonic segment half (tectonic_segments > 0.55). All three gates must align to produce a dip below -1.05.",
+  "type": "minecraft:flat_cache",
+  "argument": {
+    "type": "minecraft:add",
+    "argument1": {
+      "type": "minecraft:add",
+      "argument1": "terra_continental:continent_base",
+      "argument2": "terra_continental:tectonic_boost"
+    },
+    "argument2": "terra_continental:mushroom_dip"
+  }
+}

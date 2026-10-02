@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:flat_cache",
+  "argument": {
+    "type": "minecraft:mul",
+    "argument1": {
+      "type": "minecraft:mul",
+      "argument1": 0.85,
+      "argument2": "terra_continental:tectonic_chain"
+    },
+    "argument2": {
+      "type": "minecraft:clamp",
+      "input": {
+        "type": "minecraft:mul",
+        "argument1": -2.0,
+        "argument2": {
+          "type": "minecraft:add",
+          "argument1": 0.11,
+          "argument2": "terra_continental:continent_base"
+        }
+      },
+      "min": 0.0,
+      "max": 1.0
+    }
+  }
+}

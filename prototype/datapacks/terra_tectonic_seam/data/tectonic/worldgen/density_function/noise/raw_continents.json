@@ -1,0 +1,5 @@
+{
+  "_comment": "SEAM: Tectonic's entire terrain-height pipeline (offset/factor/jaggedness splines -> depth -> surface) is keyed on tectonic:noise/raw_continents. By overriding it with Terra Continental's radial multi-continent continentalness, OUR system decides where land and ocean are, while Tectonic's splines still supply all the relief (mountains on our land, abyssal floors in our ocean gaps). continent_base is the pure radial field (floored at -1.02), without our own deactivated tectonic_boost/mushroom_dip. First-pass mapping is near-identity: raw_continents' land threshold (~-0.17) and ocean bands (-0.35 ocean, -0.45 deep) line up with MC continentalness semantics. Our deep-negative ocean values fall past -0.45 = Tectonic's deepest-ocean spline = intimidating oceans; our continent bumps (+1.45) land in Tectonic's mountain regions. Calibrate the mapping here if oceans read too uniformly deep or coasts sit wrong.",
+  "type": "minecraft:flat_cache",
+  "argument": "terra_continental:continent_base"
+}

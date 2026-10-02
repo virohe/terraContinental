@@ -1,0 +1,60 @@
+{
+  "type": "minecraft:flat_cache",
+  "argument": {
+    "type": "minecraft:mul",
+    "argument1": -0.022,
+    "argument2": {
+      "type": "minecraft:mul",
+      "argument1": {
+        "type": "minecraft:square",
+        "argument": {
+          "type": "minecraft:clamp",
+          "input": {
+            "type": "minecraft:add",
+            "argument1": 1.0,
+            "argument2": {
+              "type": "minecraft:mul",
+              "argument1": -12.5,
+              "argument2": {
+                "type": "minecraft:abs",
+                "argument": "minecraft:overworld/ridges"
+              }
+            }
+          },
+          "min": 0.0,
+          "max": 1.0
+        }
+      },
+      "argument2": {
+        "type": "minecraft:mul",
+        "argument1": {
+          "type": "minecraft:clamp",
+          "input": {
+            "type": "minecraft:mul",
+            "argument1": 60.0,
+            "argument2": "terra_continental:tectonic_potential"
+          },
+          "min": 0.0,
+          "max": 1.0
+        },
+        "argument2": {
+          "type": "minecraft:square",
+          "argument": {
+            "type": "minecraft:clamp",
+            "input": {
+              "type": "minecraft:add",
+              "argument1": 1.0,
+              "argument2": {
+                "type": "minecraft:mul",
+                "argument1": -3.333,
+                "argument2": "terra_continental:tectonic_potential"
+              }
+            },
+            "min": 0.0,
+            "max": 1.0
+          }
+        }
+      }
+    }
+  }
+}
