@@ -5,6 +5,15 @@ reconstructed on 2026-09-27; everything from
 0.0.1 to 0.7.3 landed in one catch-up commit (`15597b7`) because it had not been committed as
 it happened. Earlier history is in `git log`.
 
+## 0.8.1 — 2026-10-16
+- **`/continental villages`** (permission 2; user request, 2026-10-16): every village on the
+  continent you're standing on, nearest first, each line clickable to teleport there
+  (`/continental villages tp <n>`), the way `/terraTowns hamlets` hops between hamlets. Your
+  continent is the seed-placed land circle you stand in, searched 25% past its edge for its coasts;
+  each village structure set's grid is walked over it and every candidate spot asked, as /locate
+  does, whether a village starts there. Run from the console, it lists the spawn continent.
+  (`commands.VillagesCommand`, `RadialFalloffFunction.continents`)
+
 ## 0.8.0 — 2026-10-01
 - **Renamed `terra_incognita` → `terra_continental`** (Terra Continental), so the mod no longer
   shares a name with the modpack. Everything moved with it: mod id, jar name, Java package

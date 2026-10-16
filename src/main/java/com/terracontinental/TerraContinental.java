@@ -61,6 +61,8 @@ public class TerraContinental {
         modEventBus.addListener(TerraContinental::addPackFinders);
         NeoForge.EVENT_BUS.addListener(DumpBiomesCommand::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(BiomeMapCommand::onRegisterCommands);
+        NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.VillagesCommand::onRegisterCommands);
+        NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.VillagesCommand::onServerTick);
     }
 
     /**

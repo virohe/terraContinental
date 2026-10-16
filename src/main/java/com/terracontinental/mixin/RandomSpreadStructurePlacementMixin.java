@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * that uses this (the vast majority).
  */
 @Mixin(RandomSpreadStructurePlacement.class)
-public abstract class RandomSpreadStructurePlacementMixin {
+public abstract class RandomSpreadStructurePlacementMixin implements com.terracontinental.structure.TrueSpacing {
 
     @Shadow @Final private int spacing;
     @Shadow @Final private int separation;
@@ -52,6 +52,11 @@ public abstract class RandomSpreadStructurePlacementMixin {
             }
         } catch (Throwable ignored) {}
         return 1.0;
+    }
+
+    @Override
+    public int terraContinental$trueSpacing() {
+        return this.spacing;
     }
 
     @Inject(method = "spacing()I", at = @At("HEAD"), cancellable = true)

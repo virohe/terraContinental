@@ -214,6 +214,18 @@ public final class RadialFalloffFunction implements DensityFunction {
         return 1.0 - t * t * (3.0 - 2.0 * t);
     }
 
+    /**
+     * Every continent as {x, z, radius}: the spawn continent at the origin first, then the
+     * seed-placed ones. For finding which continent a position is on (/continental villages).
+     */
+    public double[][] continents() {
+        double[][] extra = additionalContinents > 0 ? centers() : new double[0][];
+        double[][] all = new double[extra.length + 1][];
+        all[0] = new double[]{0.0, 0.0, centralLandRadius};
+        System.arraycopy(extra, 0, all, 1, extra.length);
+        return all;
+    }
+
     private double[][] centers() {
         double[][] result = centers;
         if (result == null) {

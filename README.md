@@ -33,7 +33,8 @@ through `../scripts/release.sh terra-continental <version>`.
   - `end_biomes`: a temperature noise for the End router, so WorldWeaver spreads BetterEnd's
     biomes on worlds that keep vanilla's End biome source.
 - BWG compatibility mixins (ocean formations, pumpkin-patch deadlock).
-- `/continental` commands: biome dump and biome map.
+- `/continental` commands: biome dump, biome map, and `villages` (list and teleport to the villages
+  on your continent).
 
 ## Config
 
