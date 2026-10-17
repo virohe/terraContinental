@@ -30,9 +30,12 @@ public class TerraStructureConfig {
                          "Villages need their own dial because two independent structure_sets place them —",
                          "minecraft:villages and biomeswevegone:villages, each with its own grid and salt — and BWG",
                          "also adds ~21 of its biomes to the vanilla village tags, so far more of the map is eligible.",
-                         "Measured on a 138 km2 spawn continent: 1.0 gives ~181 villages, 4.3 gives ~11.",
-                         "Village count scales as 1/multiplier^2, so double this to quarter the villages. Default: 4.3")
-                .defineInRange("village_spacing_multiplier", 4.3, 0.1, 20.0);
+                         "NOT vanilla's spacing: villages sit on the built-in distant_towns grid of 129 chunks (vanilla",
+                         "uses 34), times structure_spacing_multiplier, times this. 1.0 with the global 1.5 puts",
+                         "villages ~193 chunks (~3,100 blocks) apart. Measured 2026-10-16 on the real pack: 1.5 x 1.1",
+                         "gave 7 on both a 15.7 km and the 9 km spawn continent; 1.0 aims at ~8-9.",
+                         "Village count scales as 1/multiplier^2, so double this to quarter the villages. Default: 1.0")
+                .defineInRange("village_spacing_multiplier", 1.0, 0.1, 20.0);
         BUILDER.pop();
 
         SPEC = BUILDER.build();

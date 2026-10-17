@@ -1,0 +1,20 @@
+{
+    "neoforge:conditions": [
+        {
+            "type": "neoforge:mod_loaded",
+            "modid": "biomeswevegone"
+        }
+    ],
+    "placement": {
+        "type": "minecraft:random_spread",
+        "salt": 902114377,
+        "spacing": 500,
+        "separation": 250
+    },
+    "structures": [
+        {
+            "structure": "biomeswevegone:village/forgotten",
+            "weight": 1
+        }
+    ]
+}

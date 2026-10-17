@@ -57,7 +57,10 @@ public class TerraContinental {
         DENSITY_FUNCTION_TYPES.register(modEventBus);
         adoptLegacyConfig("terra_incognita-common.toml", "terra_continental-common.toml");
         modContainer.registerConfig(ModConfig.Type.COMMON, TerraConfig.SPEC, "terra_continental-common.toml");
-        modContainer.registerConfig(ModConfig.Type.SERVER, TerraStructureConfig.SPEC, "terra_continental-structures.toml");
+        // COMMON, not SERVER (0.8.2): a server config loads per world as the server starts, after
+        // the world's structure placements are built, so the spacing multipliers read "not
+        // loaded" and never applied (TI-102). A common config is loaded before any world.
+        modContainer.registerConfig(ModConfig.Type.COMMON, TerraStructureConfig.SPEC, "terra_continental-structures.toml");
         modEventBus.addListener(TerraContinental::addPackFinders);
         NeoForge.EVENT_BUS.addListener(DumpBiomesCommand::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(BiomeMapCommand::onRegisterCommands);

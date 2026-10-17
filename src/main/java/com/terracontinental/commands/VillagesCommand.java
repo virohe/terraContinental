@@ -4,7 +4,6 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.terracontinental.density.RadialFalloffFunction;
-import com.terracontinental.structure.TrueSpacing;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -49,13 +48,19 @@ import java.util.UUID;
  * tight: a playtest village sat 11,350 blocks from the origin, past the spawn continent's 9,000.
  * Villages never generate in the ocean, so nearest-continent splits the land between them.</p>
  *
- * <p><b>The search</b> walks each village structure set's real grid ({@link TrueSpacing}; the
- * scaled {@code spacing()} skipped five cells in six) and asks each candidate spot, as /locate
+ * <p><b>The search</b> walks each village structure set's grid and asks each candidate spot, as /locate
  * does, whether a village starts there. For a spot never visited that answer lays the village out,
  * so a continent's ~1,000 spots took 4 minutes in one tick on the real-pack rig: the search runs
  * {@link #BUDGET_NANOS} per server tick instead, and a continent's answer is kept for the session.</p>
  */
 public final class VillagesCommand {
+
+    /**
+     * In the village tag but not villages (user, 2026-10-16): BWG's Pumpkin Patches are home to
+     * pumpkin wardens, not villagers, and its Forgotten villages are ruins with nobody in them.
+     */
+    private static final Set<String> NOT_VILLAGES = Set.of(
+            "biomeswevegone:village/pumpkin_patch", "biomeswevegone:village/forgotten");
 
     /** A continent reaches this many of its radii: its land goes well past its circle. */
     private static final double MARGIN = 2.0;
@@ -79,6 +84,10 @@ public final class VillagesCommand {
         int next;
         int reportedQuarter;
         final long startNanos = System.nanoTime();
+        /** Verify mode: generate every spot's structure starts and compare with the quick answer. */
+        boolean verify;
+        /** Verify mode: where the quick check said yes, asked BEFORE that spot was generated. */
+        final Set<Long> quick = new HashSet<>();
 
         Job(CommandSourceStack source, double[] continent, double x, double z, List<Candidate> candidates) {
             this.source = source;
@@ -107,6 +116,7 @@ public final class VillagesCommand {
                 .requires(src -> src.hasPermission(2))
                 .then(Commands.literal("villages")
                         .executes(VillagesCommand::list)
+                        .then(Commands.literal("verify").executes(VillagesCommand::verify))
                         .then(Commands.literal("tp")
                                 .then(Commands.argument("n", IntegerArgumentType.integer(1))
                                         .executes(VillagesCommand::tp)))));
@@ -141,6 +151,31 @@ public final class VillagesCommand {
         return 1;
     }
 
+    /**
+     * /continental villages verify: the same search done the slow, certain way. Every candidate
+     * spot's structure starts are generated (what the world builds a village from) and the result
+     * compared with the quick answer: confirmed, listed but absent, present but missed.
+     */
+    private static int verify(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        ServerLevel level = source.getServer().overworld();
+        double px = source.getPosition().x;
+        double pz = source.getPosition().z;
+        RadialFalloffFunction falloff = falloff(level);
+        double[] continent = falloff == null ? null : nearest(falloff.continents(), px, pz);
+        if (continent == null) {
+            source.sendFailure(Component.literal("[continental] You aren't on a continent"));
+            return 0;
+        }
+        List<Candidate> candidates = candidates(level, falloff.continents(), continent);
+        Job job = new Job(source, continent, px, pz, candidates);
+        job.verify = true;
+        JOBS.add(job);
+        source.sendSuccess(() -> Component.literal("[continental] Verifying " + candidates.size()
+                + " spots by generating their structure starts (slow)."), false);
+        return 1;
+    }
+
     /** Work on the searches under way, a little each tick. */
     public static void onServerTick(ServerTickEvent.Post event) {
         if (JOBS.isEmpty()) {
@@ -151,7 +186,10 @@ public final class VillagesCommand {
         Job job = JOBS.get(0);
         while (job.next < job.candidates.size() && System.nanoTime() < deadline) {
             Candidate c = job.candidates.get(job.next++);
-            String which = villageAt(level, c);
+            if (job.verify && villageAt(level, c) != null) {
+                job.quick.add(c.chunk().toLong()); // before generating, or it would read the answer back
+            }
+            String which = job.verify ? villageStartedAt(level, c) : villageAt(level, c);
             if (which != null) {
                 job.found.add(new Village(c.chunk(), which));
             }
@@ -162,12 +200,30 @@ public final class VillagesCommand {
             int pct = quarter * 25;
             job.source.sendSuccess(() -> Component.literal("[continental] Villages: " + pct + "% searched"), false);
         }
+        if (job.next >= job.candidates.size() && job.verify) {
+            JOBS.remove(0);
+            reportVerify(level, job);
+            return;
+        }
         if (job.next >= job.candidates.size()) {
             JOBS.remove(0);
             List<Village> found = List.copyOf(job.found);
             FOUND.put(key(job.continent), found);
             report(job.source, job.continent, found, job.x, job.z, (System.nanoTime() - job.startNanos) / 1_000_000L);
         }
+    }
+
+    private static void reportVerify(ServerLevel level, Job job) {
+        Set<Long> real = new HashSet<>();
+        job.found.forEach(v -> real.add(v.chunk().toLong()));
+        Set<Long> quick = job.quick;
+        long confirmed = quick.stream().filter(real::contains).count();
+        long phantom = quick.stream().filter(k -> !real.contains(k)).count();
+        long missed = real.stream().filter(k -> !quick.contains(k)).count();
+        String msg = String.format("[continental] Verified: %d villages really start on this continent; the quick search "
+                        + "lists %d (%d confirmed, %d listed but absent, %d missed) (%d s)",
+                real.size(), quick.size(), confirmed, phantom, missed, (System.nanoTime() - job.startNanos) / 1_000_000_000L);
+        job.source.sendSuccess(() -> Component.literal(msg), false);
     }
 
     /** List the villages nearest first, each clickable; remember the order for tp. */
@@ -262,6 +318,9 @@ public final class VillagesCommand {
         // Village structures, grouped by the placement (structure set) that spaces them.
         Map<StructurePlacement, Set<Holder<Structure>>> byPlacement = new HashMap<>();
         registry.getTagOrEmpty(StructureTags.VILLAGE).forEach(holder -> {
+            if (holder.unwrapKey().map(k -> NOT_VILLAGES.contains(k.location().toString())).orElse(false)) {
+                return;
+            }
             for (StructurePlacement p : state.getPlacementsForStructure(holder)) {
                 byPlacement.computeIfAbsent(p, k -> new LinkedHashSet<>()).add(holder);
             }
@@ -277,8 +336,7 @@ public final class VillagesCommand {
             if (!(e.getKey() instanceof RandomSpreadStructurePlacement spread)) {
                 continue;
             }
-            // The grid villages really generate on, not the scaled spacing() (see TrueSpacing).
-            int spacing = ((TrueSpacing) spread).terraContinental$trueSpacing();
+            int spacing = spread.spacing();
             for (int rx = Math.floorDiv(minChunkX, spacing); rx <= Math.floorDiv(maxChunkX, spacing); rx++) {
                 for (int rz = Math.floorDiv(minChunkZ, spacing); rz <= Math.floorDiv(maxChunkZ, spacing); rz++) {
                     ChunkPos chunk = spread.getPotentialStructureChunk(state.getLevelSeed(), rx * spacing, rz * spacing);
@@ -294,6 +352,21 @@ public final class VillagesCommand {
             }
         }
         return out;
+    }
+
+    /** The village whose structure start really exists at the candidate (generating it if need be), or null. */
+    @Nullable
+    private static String villageStartedAt(ServerLevel level, Candidate c) {
+        var manager = level.structureManager();
+        net.minecraft.world.level.chunk.ChunkAccess chunk = level.getChunk(c.chunk().x, c.chunk().z,
+                net.minecraft.world.level.chunk.status.ChunkStatus.STRUCTURE_STARTS);
+        for (Holder<Structure> holder : c.structures()) {
+            var start = manager.getStartForStructure(net.minecraft.core.SectionPos.bottomOf(chunk), holder.value(), chunk);
+            if (start != null && start.isValid()) {
+                return holder.unwrapKey().map(k -> k.location().toString()).orElse("village");
+            }
+        }
+        return null;
     }
 
     /**

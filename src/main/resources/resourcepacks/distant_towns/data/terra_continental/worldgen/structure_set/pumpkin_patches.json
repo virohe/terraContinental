@@ -1,0 +1,20 @@
+{
+    "neoforge:conditions": [
+        {
+            "type": "neoforge:mod_loaded",
+            "modid": "biomeswevegone"
+        }
+    ],
+    "placement": {
+        "type": "minecraft:random_spread",
+        "salt": 731045921,
+        "spacing": 129,
+        "separation": 100
+    },
+    "structures": [
+        {
+            "structure": "biomeswevegone:village/pumpkin_patch",
+            "weight": 1
+        }
+    ]
+}

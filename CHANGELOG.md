@@ -5,6 +5,29 @@ reconstructed on 2026-09-27; everything from
 0.0.1 to 0.7.3 landed in one catch-up commit (`15597b7`) because it had not been committed as
 it happened. Earlier history is in `git log`.
 
+## 0.8.2 — 2026-10-16
+- **Structure spacing config now works** (TI-102, TI-103). Until now the spacing mixin only changed
+  what `spacing()` reported, which generation never reads, so `structure_spacing_multiplier` (1.5)
+  and `village_spacing_multiplier` never applied and only made `/locate` wrong; a continent meant
+  to hold ~8-12 villages held 33. The fields themselves are now scaled as each placement is built.
+  The structure config (`terra_continental-structures.toml`) is now a **common** config, read from
+  `config/`: as a per-world server config it loaded after the world's placements were built, so
+  even scaled at build time it read "not loaded" and every multiplier was 1.0. Per-world copies in
+  `saves/<world>/serverconfig/` are no longer read.
+  **Every random-spread structure** follows the global multiplier in chunks generated from now on.
+- `village_spacing_multiplier` default 4.3 → **1.0** (and in the Terra Incognita instance's config):
+  4.3 was measured against vanilla's 34-chunk village grid, before the built-in `distant_towns`
+  grid (129) existed; on top of it, 1.5 × 4.3 would leave about one village per continent. It is
+  not vanilla's spacing: 1.0 with the global 1.5 puts villages ~193 chunks apart (vanilla: 34).
+  1.5 × 1.1 measured 7 villages on both a 15.7 km continent and the 9 km spawn continent.
+- **BWG Pumpkin Patches and Forgotten villages** (user, 2026-10-16) are taken out of BWG's village
+  grid and given their own: Pumpkin Patches about as common as villages but at least ~150 chunks
+  (2,400 blocks) apart, so rarely two in one biome; Forgotten villages rare (~750 chunks apart).
+  Neither is listed by `/continental villages`: Pumpkin Patches are home to pumpkin wardens, and
+  Forgotten villages are ruins with no villagers.
+- `/locate` is honest again, and `/continental villages` reads `spacing()` directly (the 0.8.1
+  `TrueSpacing` workaround is gone).
+
 ## 0.8.1 — 2026-10-16
 - **`/continental villages`** (permission 2; user request, 2026-10-16): every village on the
   continent you're standing on, nearest first, each line clickable to teleport there

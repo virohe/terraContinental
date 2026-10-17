@@ -1,6 +1,6 @@
 {
   "pack": {
     "pack_format": 48,
-    "description": "Terra Continental: village spacing x3.8 (~8-12 villages per continent). Built-in, always active."
+    "description": "Terra Continental: village grids (129 chunks, scaled by the structure config); BWG Pumpkin Patches and Forgotten villages on grids of their own. Built-in, always active."
   }
 }
