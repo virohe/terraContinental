@@ -1,4 +1,4 @@
-﻿{
+{
   "dimensions": {
     "minecraft:overworld": {
       "type": "minecraft:overworld",
@@ -8,7 +8,7 @@
           "type": "minecraft:multi_noise",
           "preset": "minecraft:overworld"
         },
-        "settings": "terra_continental:overworld_large_biomes"
+        "settings": "terra_continental:overworld_large"
       }
     },
     "minecraft:the_nether": {

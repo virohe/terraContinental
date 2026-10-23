@@ -1,7 +1,5 @@
 {
-  "generator.terra_continental.terra_continental":  "Terra Continental",
-  "generator.terra_continental.large_biomes":     "Terra Continental — Large Biomes",
-  "generator.terra_continental.warm_world":       "Terra Continental — Warm World",
-  "generator.terra_continental.cold_world":       "Terra Continental — Cold World",
-  "generator.terra_continental.temperate_world":  "Terra Continental — Temperate"
+  "generator.terra_continental.large_biomes": "TC: Large Biomes",
+  "generator.terra_continental.temperate": "TC: Temperate",
+  "generator.terra_continental.climates": "TC: Climates"
 }

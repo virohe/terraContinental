@@ -1,0 +1,19 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "biomeswevegone"
+    }
+  ],
+  "structures": [
+    {
+      "structure": "biomeswevegone:village/skyris",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "terra_continental:spawn_village",
+    "village_type": "skyris",
+    "salt": 771200306
+  }
+}

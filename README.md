@@ -42,8 +42,23 @@ through `../scripts/release.sh terra-continental <version>`.
 formations, temperate spawn continent), caves. On the first start after the rename, an existing
 `terra_incognita-common.toml` is copied to the new name (the old file stays as a backup).
 
-`terra_continental-structures.toml`: spacing multipliers — keep them at 1.0; they never affected
-generation, only `/locate` (see the workspace CLAUDE.md).
+`terra_continental-structures.toml`:
+- `[global] structure_spacing_multiplier` (1.5) and `[villages] village_spacing_multiplier` (1.0):
+  every random-spread structure's spacing, and the village grids on top. They only shape the
+  continents other than spawn now.
+- `[spawn_villages]`: the spawn continent's planned villages. `enabled` (true), `count` (10; keep
+  at least 9: up to 8 players plus the central village), `min_gap` (3000 blocks), `max_relief`
+  (14: steepest ground a village may start on), `themed_max` (0: up to this many desert, savanna
+  or snowy villages on temperate ground).
+
+## World types
+
+**TC: Large Biomes** (what a new world starts on), **TC: Temperate** and **TC: Climates**, listed
+first, then vanilla's Default and the rest; see CHANGELOG 0.9.0. Dedicated servers: set
+`level-type=terra_continental:large_biomes`. Large Biomes and Climates use copies of Tectonic's overworld
+noise settings: regenerate them with `tools/make_world_types.py <tectonic.jar>` after a Tectonic
+update. Dedicated servers need WorldWeaver's `force_default_world_preset` off
+(`config/wover/main.json`), or WorldWeaver replaces the world type.
 
 ## Tools
 

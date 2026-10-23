@@ -6,9 +6,17 @@
   "mixins": [
     "RandomSpreadStructurePlacementMixin",
     "ConcentricRingsStructurePlacementMixin",
-    "StructurePlacementAccessor"
+    "StructurePlacementAccessor",
+    "StructurePlacementSpawnMixin",
+    "ChunkGeneratorLocateMixin",
+    "WorldPresetsMixin"
   ],
   "injectors": {
     "defaultRequire": 1
-  }
+  },
+  "client": [
+    "client.CreateWorldScreenMixin",
+    "client.WorldCreationUiStateMixin",
+    "client.WorldCreationUiStateOrderMixin"
+  ]
 }

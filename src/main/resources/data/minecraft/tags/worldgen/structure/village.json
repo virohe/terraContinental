@@ -1,0 +1,12 @@
+{
+  "replace": false,
+  "values": [
+    "terra_continental:spawn_village/desert",
+    "terra_continental:spawn_village/savanna",
+    "terra_continental:spawn_village/snowy",
+    {
+      "id": "biomeswevegone:village/swamp",
+      "required": false
+    }
+  ]
+}

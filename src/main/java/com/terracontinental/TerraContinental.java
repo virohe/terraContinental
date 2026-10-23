@@ -53,8 +53,16 @@ public class TerraContinental {
     public static final Supplier<MapCodec<SpawnClimateMask>> SPAWN_CLIMATE_MASK =
             DENSITY_FUNCTION_TYPES.register("spawn_climate_mask", () -> SpawnClimateMask.CODEC);
 
+    public static final DeferredRegister<net.minecraft.world.level.levelgen.structure.placement.StructurePlacementType<?>> PLACEMENT_TYPES =
+            DeferredRegister.create(Registries.STRUCTURE_PLACEMENT, MOD_ID);
+
+    /** Spawn-continent villages placed by plan, not by grid (village audit, 2026-10-18). */
+    public static final Supplier<net.minecraft.world.level.levelgen.structure.placement.StructurePlacementType<com.terracontinental.spawn.SpawnVillagePlacement>> SPAWN_VILLAGE_PLACEMENT =
+            PLACEMENT_TYPES.register("spawn_village", () -> () -> com.terracontinental.spawn.SpawnVillagePlacement.CODEC);
+
     public TerraContinental(IEventBus modEventBus, ModContainer modContainer) {
         DENSITY_FUNCTION_TYPES.register(modEventBus);
+        PLACEMENT_TYPES.register(modEventBus);
         adoptLegacyConfig("terra_incognita-common.toml", "terra_continental-common.toml");
         modContainer.registerConfig(ModConfig.Type.COMMON, TerraConfig.SPEC, "terra_continental-common.toml");
         // COMMON, not SERVER (0.8.2): a server config loads per world as the server starts, after
@@ -66,6 +74,12 @@ public class TerraContinental {
         NeoForge.EVENT_BUS.addListener(BiomeMapCommand::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.VillagesCommand::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.VillagesCommand::onServerTick);
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerAboutToStartEvent e) ->
+                com.terracontinental.worldtype.WorldTypeCheck.run(e.getServer()));
+        // Plan the spawn villages off-thread as soon as the server is up. The plan isn't saved, so
+        // without this the first new chunk after a restart waits ~15 s for it.
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStartedEvent e) ->
+                java.util.concurrent.CompletableFuture.runAsync(() -> com.terracontinental.spawn.SpawnVillagePlanner.get(e.getServer().overworld())));
     }
 
     /**
@@ -131,6 +145,19 @@ public class TerraContinental {
                     ResourceLocation.fromNamespaceAndPath(MOD_ID, "resourcepacks/distant_towns"),
                     PackType.SERVER_DATA,
                     Component.literal("Terra Continental distant towns"),
+                    PackSource.BUILT_IN,
+                    true,
+                    Pack.Position.TOP);
+            // BWG's open grasslands accept plains villages (village audit, 2026-10-18: coconino
+            // meadow, prairie, allium shrubland and amaranth grassland cover 10-20% of a spawn
+            // continent and took no village; tagging them lifted grid success from 14% to 21%).
+            // The tag entries are optional, so the pack is harmless without BWG. (Not a load
+            // condition: a failed condition on a tag file empties the whole tag, vanilla plains
+            // villages included.)
+            event.addPackFinders(
+                    ResourceLocation.fromNamespaceAndPath(MOD_ID, "resourcepacks/village_biomes"),
+                    PackType.SERVER_DATA,
+                    Component.literal("Terra Continental village biomes"),
                     PackSource.BUILT_IN,
                     true,
                     Pack.Position.TOP);

@@ -1,0 +1,13 @@
+{
+  "structures": [
+    {
+      "structure": "minecraft:village_snowy",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "terra_continental:spawn_village",
+    "village_type": "snowy",
+    "salt": 771200303
+  }
+}

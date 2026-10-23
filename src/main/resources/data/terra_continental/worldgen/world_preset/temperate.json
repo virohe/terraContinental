@@ -1,4 +1,4 @@
-﻿{
+{
   "dimensions": {
     "minecraft:overworld": {
       "type": "minecraft:overworld",
@@ -8,7 +8,7 @@
           "type": "minecraft:multi_noise",
           "preset": "minecraft:overworld"
         },
-        "settings": "terra_continental:overworld_temperate"
+        "settings": "minecraft:overworld"
       }
     },
     "minecraft:the_nether": {

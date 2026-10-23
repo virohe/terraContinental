@@ -1,0 +1,13 @@
+{
+  "structures": [
+    {
+      "structure": "minecraft:village_taiga",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "terra_continental:spawn_village",
+    "village_type": "taiga",
+    "salt": 771200302
+  }
+}

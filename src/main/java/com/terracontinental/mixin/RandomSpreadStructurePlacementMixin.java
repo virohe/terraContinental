@@ -44,7 +44,9 @@ public abstract class RandomSpreadStructurePlacementMixin {
     @Inject(method = "<init>(Lnet/minecraft/core/Vec3i;Lnet/minecraft/world/level/levelgen/structure/placement/StructurePlacement$FrequencyReductionMethod;FILjava/util/Optional;IILnet/minecraft/world/level/levelgen/structure/placement/RandomSpreadType;)V",
             at = @At("RETURN"))
     private void terraContinental$scale(CallbackInfo ci) {
-        double mult = terraContinental$multiplier();
+        // Rounded first: 1.5 * 0.7 is 1.0499999999999998 in floating point, which made separation round
+        // to 31 instead of 32 and moved every village (audit 2026-10-18).
+        double mult = Math.round(terraContinental$multiplier() * 1_000_000d) / 1_000_000d;
         if (mult == 1.0) {
             return;
         }

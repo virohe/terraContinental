@@ -1,0 +1,13 @@
+{
+  "structures": [
+    {
+      "structure": "minecraft:village_desert",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "terra_continental:spawn_village",
+    "village_type": "desert",
+    "salt": 771200304
+  }
+}

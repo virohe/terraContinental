@@ -1,4 +1,5 @@
 {
+    "neoforge:conditions": [{"type": "neoforge:mod_loaded", "modid": "biomeswevegone"}],
     "type":  "ohthetreesyoullgrow:tree_from_nbt_v1",
     "config":  {
                    "base_location":  "biomeswevegone:features/trees/palm/palm_trunk",

@@ -1,0 +1,13 @@
+{
+  "structures": [
+    {
+      "structure": "minecraft:village_savanna",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "terra_continental:spawn_village",
+    "village_type": "savanna",
+    "salt": 771200305
+  }
+}

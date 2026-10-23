@@ -1,0 +1,13 @@
+{
+  "structures": [
+    {
+      "structure": "minecraft:village_plains",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "terra_continental:spawn_village",
+    "village_type": "plains",
+    "salt": 771200301
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "structures": [
+    {
+      "structure": "terra_continental:spawn_village/desert",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "terra_continental:spawn_village",
+    "village_type": "desert_themed",
+    "salt": 771200320
+  }
+}

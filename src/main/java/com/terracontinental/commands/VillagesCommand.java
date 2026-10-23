@@ -4,6 +4,9 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.terracontinental.density.RadialFalloffFunction;
+import com.terracontinental.spawn.LandMask;
+import com.terracontinental.spawn.SpawnVillagePlacement;
+import com.terracontinental.spawn.SpawnVillagePlanner;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -76,7 +79,7 @@ public final class VillagesCommand {
     /** A search under way: who asked, from where, and what's left to check. */
     private static final class Job {
         final CommandSourceStack source;
-        final double[] continent;
+        final LandMask continent;
         final double x;
         final double z;
         final List<Candidate> candidates;
@@ -89,7 +92,7 @@ public final class VillagesCommand {
         /** Verify mode: where the quick check said yes, asked BEFORE that spot was generated. */
         final Set<Long> quick = new HashSet<>();
 
-        Job(CommandSourceStack source, double[] continent, double x, double z, List<Candidate> candidates) {
+        Job(CommandSourceStack source, LandMask continent, double x, double z, List<Candidate> candidates) {
             this.source = source;
             this.continent = continent;
             this.x = x;
@@ -100,7 +103,9 @@ public final class VillagesCommand {
 
     private static final List<Job> JOBS = new ArrayList<>();
     /** Each continent's villages, by "x,z" of its centre, for the rest of the session. */
-    private static final Map<String, List<Village>> FOUND = new HashMap<>();
+    private static final Map<Long, List<Village>> FOUND = new HashMap<>();
+    /** How far the land search reaches from the player, in blocks. */
+    private static final int REACH = 25_000;
     /** Each player's last listing, nearest first, for tp by number. */
     private static final Map<UUID, List<Village>> LAST = new HashMap<>();
 
@@ -132,22 +137,21 @@ public final class VillagesCommand {
         // From the console (no player) it lists the continent around the world spawn.
         double px = source.getPosition().x;
         double pz = source.getPosition().z;
-        RadialFalloffFunction falloff = falloff(level);
-        double[] continent = falloff == null ? null : nearest(falloff.continents(), px, pz);
+        LandMask continent = LandMask.at(level, px, pz, REACH);
         if (continent == null) {
-            source.sendFailure(Component.literal("[continental] You aren't on a continent (no Terra Continental terrain here)"));
+            source.sendFailure(Component.literal("[continental] You're out at sea: stand on land to list its villages"));
             return 0;
         }
-        List<Village> known = FOUND.get(key(continent));
+        List<Village> known = FOUND.get(continent.key);
         if (known != null) {
             report(source, continent, known, px, pz, 0);
             return known.size();
         }
-        List<Candidate> candidates = candidates(level, falloff.continents(), continent);
+        List<Candidate> candidates = candidates(level, continent);
         JOBS.add(new Job(source, continent, px, pz, candidates));
         source.sendSuccess(() -> Component.literal(String.format(
-                "[continental] Searching %d spots on this continent (centre %d, %d) for villages; the list follows when done.",
-                candidates.size(), (int) continent[0], (int) continent[1])), false);
+                "[continental] Searching %d spots on this landmass (%d km2) for villages; the list follows when done.",
+                candidates.size(), Math.round(continent.areaKm2()))), false);
         return 1;
     }
 
@@ -161,13 +165,12 @@ public final class VillagesCommand {
         ServerLevel level = source.getServer().overworld();
         double px = source.getPosition().x;
         double pz = source.getPosition().z;
-        RadialFalloffFunction falloff = falloff(level);
-        double[] continent = falloff == null ? null : nearest(falloff.continents(), px, pz);
+        LandMask continent = LandMask.at(level, px, pz, REACH);
         if (continent == null) {
-            source.sendFailure(Component.literal("[continental] You aren't on a continent"));
+            source.sendFailure(Component.literal("[continental] You're out at sea: stand on land"));
             return 0;
         }
-        List<Candidate> candidates = candidates(level, falloff.continents(), continent);
+        List<Candidate> candidates = candidates(level, continent);
         Job job = new Job(source, continent, px, pz, candidates);
         job.verify = true;
         JOBS.add(job);
@@ -208,7 +211,7 @@ public final class VillagesCommand {
         if (job.next >= job.candidates.size()) {
             JOBS.remove(0);
             List<Village> found = List.copyOf(job.found);
-            FOUND.put(key(job.continent), found);
+            FOUND.put(job.continent.key, found);
             report(job.source, job.continent, found, job.x, job.z, (System.nanoTime() - job.startNanos) / 1_000_000L);
         }
     }
@@ -226,22 +229,54 @@ public final class VillagesCommand {
         job.source.sendSuccess(() -> Component.literal(msg), false);
     }
 
-    /** List the villages nearest first, each clickable; remember the order for tp. */
-    private static void report(CommandSourceStack source, double[] continent, List<Village> villages,
+    /**
+     * List the villages nearest first, each clickable; remember the order for tp. On the spawn continent
+     * the planned villages come first as the spawn continent's own, then any others the land carries
+     * further out (user, 2026-10-23: a bridged landmass listed 15, the planner's 10 plus 5 grid
+     * villages 21 km away). The tp numbers run on across both lists.
+     */
+    private static void report(CommandSourceStack source, LandMask continent, List<Village> villages,
                                double x, double z, long ms) {
         List<Village> sorted = new ArrayList<>(villages);
         sorted.sort(Comparator.comparingDouble(v -> distance(v, x, z)));
+        SpawnVillagePlanner.Plan plan = SpawnVillagePlanner.forState(
+                source.getServer().overworld().getChunkSource().getGeneratorState());
+        List<Village> spawn = new ArrayList<>();
+        List<Village> further = new ArrayList<>();
+        for (Village v : sorted) {
+            (plan != null && plan.siteAt(v.chunk().x, v.chunk().z) != null ? spawn : further).add(v);
+        }
+        List<Village> order = new ArrayList<>(spawn);
+        order.addAll(further);
         ServerPlayer player = source.getPlayer();
         if (player != null) {
-            LAST.put(player.getUUID(), sorted);
+            LAST.put(player.getUUID(), order);
+        }
+        String searched = ms > 0 ? " (searched in " + ms / 1000 + " s)" : "";
+        if (spawn.isEmpty()) {
+            source.sendSuccess(() -> Component.literal(String.format(
+                    "[continental] %d villages on this landmass (%d km2, centre %d, %d), nearest first%s:",
+                    order.size(), Math.round(continent.areaKm2()), (int) continent.centroidX, (int) continent.centroidZ,
+                    searched)), false);
+            list(source, order, 1, x, z);
+            return;
         }
         source.sendSuccess(() -> Component.literal(String.format(
-                "[continental] %d villages on this continent (centre %d, %d; radius %d), nearest first%s:",
-                sorted.size(), (int) continent[0], (int) continent[1], (int) continent[2],
-                ms > 0 ? " (searched in " + ms / 1000 + " s)" : "")), false);
-        for (int i = 0; i < sorted.size(); i++) {
-            Village v = sorted.get(i);
-            int n = i + 1;
+                "[continental] %d spawn villages on this continent, nearest first%s:", spawn.size(), searched)), false);
+        list(source, spawn, 1, x, z);
+        if (!further.isEmpty()) {
+            source.sendSuccess(() -> Component.literal(String.format(
+                    "[continental] %d more villages further along this landmass (%d km2 in all):",
+                    further.size(), Math.round(continent.areaKm2()))), false);
+            list(source, further, spawn.size() + 1, x, z);
+        }
+    }
+
+    /** One clickable line per village, numbered from {@code first}. */
+    private static void list(CommandSourceStack source, List<Village> villages, int first, double x, double z) {
+        for (int i = 0; i < villages.size(); i++) {
+            Village v = villages.get(i);
+            int n = first + i;
             String command = "/continental villages tp " + n;
             Component line = Component.literal(String.format("  %d. %s at %d, %d (%d blocks)", n,
                             v.structure(), v.chunk().getMiddleBlockX(), v.chunk().getMiddleBlockZ(), (int) distance(v, x, z)))
@@ -311,8 +346,8 @@ public final class VillagesCommand {
         return found[0];
     }
 
-    /** Every spot on {@code continent} where some village structure set could start a village. */
-    private static List<Candidate> candidates(ServerLevel level, double[][] all, double[] continent) {
+    /** Every spot on the landmass where some village structure set could start a village. */
+    private static List<Candidate> candidates(ServerLevel level, LandMask continent) {
         var registry = level.registryAccess().registryOrThrow(Registries.STRUCTURE);
         var state = level.getChunkSource().getGeneratorState();
         // Village structures, grouped by the placement (structure set) that spaces them.
@@ -325,14 +360,28 @@ public final class VillagesCommand {
                 byPlacement.computeIfAbsent(p, k -> new LinkedHashSet<>()).add(holder);
             }
         });
-        double reach = continent[2] * MARGIN;
-        int minChunkX = (int) Math.floor((continent[0] - reach) / 16.0);
-        int maxChunkX = (int) Math.ceil((continent[0] + reach) / 16.0);
-        int minChunkZ = (int) Math.floor((continent[1] - reach) / 16.0);
-        int maxChunkZ = (int) Math.ceil((continent[1] + reach) / 16.0);
+        int minChunkX = Math.floorDiv(continent.minX, 16) - 1, maxChunkX = Math.floorDiv(continent.maxX, 16) + 1;
+        int minChunkZ = Math.floorDiv(continent.minZ, 16) - 1, maxChunkZ = Math.floorDiv(continent.maxZ, 16) + 1;
+        SpawnVillagePlanner.Plan plan = SpawnVillagePlanner.forState(state);
         List<Candidate> out = new ArrayList<>();
         Set<Long> seen = new HashSet<>();
+        // On the spawn continent every planned village is listed, even one the coarse land fill cut
+        // off at a one-cell neck (audit: 9 of 10 listed on the smallest test continent).
+        boolean spawnLand = plan != null && plan.sites.values().stream()
+                .anyMatch(s -> continent.contains(s.chunk().getMiddleBlockX(), s.chunk().getMiddleBlockZ()));
         for (var e : byPlacement.entrySet()) {
+            if (e.getKey() instanceof SpawnVillagePlacement planned) {
+                if (plan == null) continue;
+                for (SpawnVillagePlanner.Site site : plan.sites.values()) {
+                    ChunkPos chunk = site.chunk();
+                    if (site.type().equals(planned.villageType())
+                            && (spawnLand || continent.contains(chunk.getMiddleBlockX(), chunk.getMiddleBlockZ()))
+                            && seen.add(chunk.toLong() ^ ((long) System.identityHashCode(planned) << 1))) {
+                        out.add(new Candidate(chunk, planned, e.getValue()));
+                    }
+                }
+                continue;
+            }
             if (!(e.getKey() instanceof RandomSpreadStructurePlacement spread)) {
                 continue;
             }
@@ -340,10 +389,7 @@ public final class VillagesCommand {
             for (int rx = Math.floorDiv(minChunkX, spacing); rx <= Math.floorDiv(maxChunkX, spacing); rx++) {
                 for (int rz = Math.floorDiv(minChunkZ, spacing); rz <= Math.floorDiv(maxChunkZ, spacing); rz++) {
                     ChunkPos chunk = spread.getPotentialStructureChunk(state.getLevelSeed(), rx * spacing, rz * spacing);
-                    int bx = chunk.getMiddleBlockX();
-                    int bz = chunk.getMiddleBlockZ();
-                    if (Math.hypot(bx - continent[0], bz - continent[1]) <= reach
-                            && Arrays.equals(nearest(all, bx, bz), continent)
+                    if (continent.contains(chunk.getMiddleBlockX(), chunk.getMiddleBlockZ())
                             && spread.isStructureChunk(state, chunk.x, chunk.z)
                             && seen.add(chunk.toLong() ^ ((long) System.identityHashCode(spread) << 1))) {
                         out.add(new Candidate(chunk, spread, e.getValue()));
