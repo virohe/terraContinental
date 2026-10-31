@@ -206,10 +206,17 @@ public final class SpawnVillagePlanner {
         int maxRelief = TerraStructureConfig.SPAWN_VILLAGE_MAX_RELIEF.get();
         themedMax = TerraStructureConfig.SPAWN_VILLAGE_THEMED_MAX.get();
 
-        // 1. Land: biome at sea level is not an ocean.
+        // 1. Land: biome at sea level is not an ocean. Read from the world plan (same lattice and test);
+        // points beyond its reach are sampled here.
         boolean[] raw = new boolean[n * n];
+        com.terracontinental.plan.WorldPlan worldPlan = com.terracontinental.plan.WorldPlan.get(level);
+        if (worldPlan != null) worldPlan.awaitReach(half * LAND_STEP);
         IntStream.range(0, n * n).parallel().forEach(i -> {
             int x = p.originX + (i % n) * LAND_STEP, z = p.originZ + (i / n) * LAND_STEP;
+            if (worldPlan != null && worldPlan.isKnown(x, z)) {
+                raw[i] = worldPlan.isLand(x, z);
+                return;
+            }
             Holder<Biome> b = bs.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(sea), QuartPos.fromBlock(z), sampler);
             raw[i] = !isOcean(b);
         });
@@ -425,7 +432,7 @@ public final class SpawnVillagePlanner {
     }
 
     static boolean isOcean(Holder<Biome> b) {
-        return b.unwrapKey().map(k -> k.location().getPath().contains("ocean")).orElse(false);
+        return com.terracontinental.plan.WorldPlan.isOcean(b);
     }
 
     private static int centralRadius() {

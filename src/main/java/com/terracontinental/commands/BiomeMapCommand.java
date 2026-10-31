@@ -131,22 +131,20 @@ public class BiomeMapCommand {
         ChunkGenerator generator = overworld.getChunkSource().getGenerator();
         BiomeSource biomeSource = generator.getBiomeSource();
 
-        // Guard against the silent world-type trap: Tectonic (and therefore the radial seam)
-        // overrides minecraft:overworld noise settings ONLY. World types like
-        // "BetterX - Large Biomes" / "- Amplified" point the overworld at large_biomes /
-        // amplified instead, so Tectonic never loads and the world silently generates
-        // vanilla-style — land everywhere, no radial continents. Say so loudly rather than
-        // letting a map get read as a real preview.
+        // Guard against the silent world-type trap: the terrain applies to minecraft:overworld
+        // and the TC world types' noise settings ONLY. World types like "BetterX - Large Biomes"
+        // / "- Amplified" point the overworld at large_biomes / amplified instead, so the world
+        // silently generates vanilla-style — land everywhere, no radial continents. Say so
+        // loudly rather than letting a map get read as a real preview.
         if (generator instanceof NoiseBasedChunkGenerator ngc) {
             var key = ngc.generatorSettings().unwrapKey().orElse(null);
-            if (key != null && !key.equals(NoiseGeneratorSettings.OVERWORLD)) {
+            if (key != null && !com.terracontinental.terrain.TerrainBase.OVERWORLD_SETTINGS.contains(key.location().toString())) {
                 source.sendFailure(Component.literal(
                     "[continental] WARNING: this world uses '" + key.location()
-                        + "' noise settings, not 'minecraft:overworld'. Tectonic and the Terra"
-                        + " Continental seam only apply to minecraft:overworld, so this world is"
-                        + " generating vanilla-style terrain with NO radial continents. Recreate"
-                        + " the world with the plain 'BetterX' world type (large biomes comes from"
-                        + " config/tectonic.json, not the Large Biomes world type). Mapping anyway:"));
+                        + "' noise settings, not Terra Continental's. Its terrain applies only to"
+                        + " minecraft:overworld and the TC world types, so this world is generating"
+                        + " vanilla-style terrain with NO radial continents. Recreate it with a"
+                        + " TC world type. Mapping anyway:"));
             }
         }
 

@@ -241,12 +241,16 @@ public final class RadialFalloffFunction implements DensityFunction {
      * fixed coordinates. Same seed = same layout; different seed = different.
      */
     private double[][] buildCenters() {
-        int n = additionalContinents;
+        return buildCenters(jitterNoise, additionalContinents, continentSpread, continentRadius);
+    }
+
+    /** Also used by {@link GiantPeaksFunction}, which must find the same continents. */
+    static double[][] buildCenters(NoiseHolder jitterNoise, int n, double continentSpread, double continentRadius) {
         double[][] result = new double[n][3];
         for (int i = 0; i < n; i++) {
-            double angleJitter = jitterSample(i, 0);
-            double distJitter = jitterSample(i, 1);
-            double radiusJitter = jitterSample(i, 2);
+            double angleJitter = jitterSample(jitterNoise, i, 0);
+            double distJitter = jitterSample(jitterNoise, i, 1);
+            double radiusJitter = jitterSample(jitterNoise, i, 2);
 
             double angle = (Math.PI * 2.0 * i) / n + angleJitter * (Math.PI / n) * 0.8;
             double dist = continentSpread * (0.40 + 0.275 * (distJitter + 1.0)); // 40%–95% of spread
@@ -259,7 +263,7 @@ public final class RadialFalloffFunction implements DensityFunction {
         return result;
     }
 
-    private double jitterSample(int index, int channel) {
+    private static double jitterSample(NoiseHolder jitterNoise, int index, int channel) {
         double raw = jitterNoise.getValue(index * 9973.0 + channel * 4451.0 + 31.0, 0.0,
                                           index * -6101.0 + channel * 2887.0 - 97.0);
         // widen typical normal-noise amplitude toward full [-1, 1] coverage

@@ -1,0 +1,58 @@
+{
+ "_comment": "LUSH CAVES. vanilla keys lush_caves on humidity >= 0.7. Measured over 99225 chunks out to r2500, lush_caves is 0.00% in EVERY depth band - it does not exist anywhere near spawn, because this pack's humidity never reaches the box. (It appears at 0.2-2% only when sampling the full r10000 extent, i.e. far from anywhere a player lives.) Tectonic's version of this file is add(0, minecraft:overworld/vegetation); under overlay.mod that resolves to tectonic:config_noise keyed 'vegetation', driven by vegetation_multiplier/scale in tectonic.json. Raising that multiplier would work but it also drives SURFACE biome selection and would reshape the whole biome map - so instead this stretches humidity only underground, blended in by depth exactly like the continents seam. CRITICAL: the spline is the IDENTITY below 0.3. Humidity underground also decides which surface biome a cave INHERITS, so stretching the low/mid range would make caves under a desert read as jungle. Only the already-humid top of the range is lifted, which keeps humid areas humid and merely lets the wettest of them reach lush's box. Blend is 0 at depth 0.1 and full by 0.3, so the surface is untouched. NOTE: the upper spline points are a first estimate - the true humidity distribution of this pack has not been measured, so calibrate against CaveBiomeCensus (target: lush a low single-digit %, roughly 1:2 against dripstone) rather than trusting these numbers.",
+ "type": "minecraft:add",
+ "argument1": "minecraft:overworld/vegetation",
+ "argument2": {
+  "type": "minecraft:mul",
+  "argument1": {
+   "type": "minecraft:clamp",
+   "input": {
+    "type": "minecraft:mul",
+    "argument1": 5.0,
+    "argument2": {
+     "type": "minecraft:add",
+     "argument1": -0.1,
+     "argument2": "terra_continental:depth"
+    }
+   },
+   "min": 0.0,
+   "max": 1.0
+  },
+  "argument2": {
+   "type": "minecraft:add",
+   "argument1": {
+    "type": "minecraft:spline",
+    "spline": {
+     "coordinate": "minecraft:overworld/vegetation",
+     "points": [
+      {
+       "location": -1.0,
+       "value": -1.0,
+       "derivative": 1.0
+      },
+      {
+       "location": 0.3,
+       "value": 0.3,
+       "derivative": 1.0
+      },
+      {
+       "location": 0.5,
+       "value": 0.6,
+       "derivative": 1.8
+      },
+      {
+       "location": 0.8,
+       "value": 1.05,
+       "derivative": 1.5
+      }
+     ]
+    }
+   },
+   "argument2": {
+    "type": "minecraft:mul",
+    "argument1": -1.0,
+    "argument2": "minecraft:overworld/vegetation"
+   }
+  }
+ }
+}

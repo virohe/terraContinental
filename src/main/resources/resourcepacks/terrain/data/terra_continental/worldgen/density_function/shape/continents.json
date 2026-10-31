@@ -1,0 +1,41 @@
+{
+ "type": "minecraft:flat_cache",
+ "argument": {
+  "type": "minecraft:spline",
+  "spline": {
+   "coordinate": "terra_continental:noise/raw_continents",
+   "points": [
+    {
+     "location": -1.5,
+     "value": -1.5,
+     "derivative": 1.0
+    },
+    {
+     "location": -0.155,
+     "value": -0.155,
+     "derivative": 0.607843137254902
+    },
+    {
+     "location": 0.2,
+     "value": 0.0,
+     "derivative": 0.4661654135338346
+    },
+    {
+     "location": 0.4,
+     "value": 0.1,
+     "derivative": 0.7
+    },
+    {
+     "location": 1.0,
+     "value": 0.8,
+     "derivative": 1.0769230769230769
+    },
+    {
+     "location": 2.0,
+     "value": 1.8,
+     "derivative": 1.0
+    }
+   ]
+  }
+ }
+}

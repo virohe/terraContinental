@@ -63,6 +63,8 @@ update. Dedicated servers need WorldWeaver's `force_default_world_preset` off
 ## Tools
 
 `preview/` is a Python simulator of the density functions (maps without running the game).
+`preview/terrain_preview.py` previews terrain heights for Tectonic settings × seeds, matching the
+game's heights (parity in `docs/testing.md` §2a'').
 World census tools live in the workspace `tools/`.
 
 This project started from the NeoForge MDK template (`TEMPLATE_LICENSE.txt`).

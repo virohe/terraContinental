@@ -1,5 +1,0 @@
-{
-  "_comment": "SEAM (baked into the mod, replaces the prototype world datapack): overrides Tectonic's tectonic:noise/raw_continents so its entire terrain-height pipeline (offset/factor/jaggedness splines -> depth -> surface) AND its biome full_continents read Terra Continental's radial multi-continent field. Result: our continents/oceans decide where land is; Tectonic's splines decide the relief. continent_base is the pure radial field (floored -1.02) without our deactivated tectonic_boost/mushroom_dip. Requires this mod to load AFTER tectonic (see optional AFTER dependency in neoforge.mods.toml) so this override wins Tectonic's own copy. Inert if Tectonic is absent (nothing reads raw_continents).",
-  "type": "minecraft:flat_cache",
-  "argument": "terra_continental:continent_base"
-}

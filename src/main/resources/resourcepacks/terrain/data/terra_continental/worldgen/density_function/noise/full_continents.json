@@ -1,0 +1,36 @@
+{
+ "type": "minecraft:flat_cache",
+ "argument": {
+  "type": "minecraft:cache_2d",
+  "argument": {
+   "type": "minecraft:add",
+   "argument1": {
+    "type": "minecraft:mul",
+    "argument1": "terra_continental:island_selector",
+    "argument2": "terra_continental:noise/raw_islands"
+   },
+   "argument2": {
+    "type": "minecraft:mul",
+    "argument1": "terra_continental:continent_selector",
+    "argument2": {
+     "type": "minecraft:spline",
+     "spline": {
+      "coordinate": "terra_continental:noise/raw_continents",
+      "points": [
+       {
+        "location": 0.05,
+        "derivative": 1,
+        "value": 0.05
+       },
+       {
+        "location": 0.175,
+        "derivative": 1,
+        "value": 0.3
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+}

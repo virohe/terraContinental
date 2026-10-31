@@ -1,0 +1,158 @@
+{
+ "type": "minecraft:flat_cache",
+ "argument": {
+  "type": "minecraft:add",
+  "argument1": {
+   "type": "minecraft:mul",
+   "argument1": "terra_continental:island_selector",
+   "argument2": "terra_continental:noise/island/ridges"
+  },
+  "argument2": {
+   "type": "minecraft:mul",
+   "argument1": "terra_continental:continent_selector",
+   "argument2": {
+    "type": "minecraft:spline",
+    "spline": {
+     "coordinate": "terra_continental:noise/continent/erosion_folded",
+     "points": [
+      {
+       "location": 0.349,
+       "derivative": 0,
+       "value": {
+        "coordinate": "terra_continental:noise/raw_continents",
+        "points": [
+         {
+          "location": -0.115,
+          "derivative": 0,
+          "value": {
+           "coordinate": "terra_continental:noise/continent/ridges",
+           "points": [
+            {
+             "location": -1,
+             "derivative": 0,
+             "value": -0.35
+            },
+            {
+             "location": 0,
+             "derivative": 0,
+             "value": -0.35
+            },
+            {
+             "location": 0,
+             "derivative": 0,
+             "value": 0.35
+            },
+            {
+             "location": 1,
+             "derivative": 0,
+             "value": 0.35
+            }
+           ]
+          }
+         },
+         {
+          "location": -0.095,
+          "derivative": 0,
+          "value": {
+           "coordinate": "terra_continental:noise/continent/ridges",
+           "points": [
+            {
+             "location": -1,
+             "derivative": 0,
+             "value": -0.5
+            },
+            {
+             "location": 0,
+             "derivative": 0,
+             "value": -0.5
+            },
+            {
+             "location": 0,
+             "derivative": 0,
+             "value": 0.5
+            },
+            {
+             "location": 1,
+             "derivative": 0,
+             "value": 0.5
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "location": 0.35,
+       "derivative": 0,
+       "value": {
+        "coordinate": "terra_continental:noise/continent/ridges",
+        "points": [
+         {
+          "location": -1,
+          "derivative": 1,
+          "value": -1
+         },
+         {
+          "location": -0.1,
+          "value": -0.1,
+          "derivative": 1
+         },
+         {
+          "location": 0,
+          "value": 0,
+          "derivative": 2
+         },
+         {
+          "location": 0.1,
+          "value": 0.1,
+          "derivative": 1
+         },
+         {
+          "location": 1,
+          "derivative": 1,
+          "value": 1
+         }
+        ]
+       }
+      },
+      {
+       "location": 0.8,
+       "derivative": 0,
+       "value": {
+        "coordinate": "terra_continental:noise/continent/ridges",
+        "points": [
+         {
+          "location": -0.5,
+          "derivative": 0,
+          "value": -0.5
+         },
+         {
+          "location": -0.1,
+          "value": -0.1,
+          "derivative": 1
+         },
+         {
+          "location": 0,
+          "value": 0,
+          "derivative": 2
+         },
+         {
+          "location": 0.1,
+          "value": 0.1,
+          "derivative": 1
+         },
+         {
+          "location": 0.5,
+          "derivative": 0,
+          "value": 0.5
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  }
+ }
+}

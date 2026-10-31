@@ -11,7 +11,7 @@
         "argument2": {
           "type": "minecraft:add",
           "argument1": -0.1,
-          "argument2": "tectonic:depth"
+          "argument2": "terra_continental:depth"
         }
       },
       "min": 0.0,

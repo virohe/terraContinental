@@ -5,6 +5,59 @@ reconstructed on 2026-09-27; everything from
 0.0.1 to 0.7.3 landed in one catch-up commit (`15597b7`) because it had not been committed as
 it happened. Earlier history is in `git log`.
 
+## 0.10.0 — 2026-10-30
+Terra Continental generates its own terrain. Tectonic's terrain is absorbed into the mod (MIT,
+credited in `resourcepacks/terrain/NOTICE.txt`), reshaped, and no longer needs Tectonic installed.
+**Tectonic is now incompatible; Lithostitched is required.** New worlds generate differently from
+0.9.0 worlds of the same seed; existing worlds keep their generated chunks.
+
+The land (user's targets: `docs/decisions.md`, 2026-10-23; measurements: `preview/SHAPES.md`):
+- **A buildable coast**: mountains reach full height ~600-900 blocks inland instead of ~300, so
+  coasts open onto a shelf, not a wall (coastal walls 18% -> ~3%).
+- **Fewer, longer ranges** (a few per continent instead of a lattice), slightly narrower, with
+  **smooth flanks instead of knobs**: the climate noises' domain warp is back at vanilla's size in
+  the world (at the terrain's larger noise scales it had doubled and crumpled every steep slope).
+  On four seeds: 5.9% of land over 45 degrees (target 5-8%), needles 3.7% -> 1.7%.
+- **No contour lines** on gentle ground: the terrain density no longer kinks at the surface, which
+  made interpolation draw a terrace every 8 blocks of height (plateau stripes, rings on the giant).
+- **The giant**: one massif per continent, ~+1,100, with a main summit that always stands highest
+  and is never cut flat by the world ceiling, ragged flanks with spurs and gullies, alpine biomes on
+  top, and each massif its own shape.
+- **Rivers stay out of ranges**: surface river channels are filled where the ground around them is
+  mountain, and river biomes stay along real rivers, not on high ground.
+- **Shore biomes only at the shore**: no Stony Shore on mountain ground inland (3 km window:
+  13.4% -> 4.2%).
+- Wetland ponds only in marsh patches on ~10% of eligible ground.
+- Deep oceans (floor ~400 below sea level) and a world from y -512 to 1,264, as before.
+
+Loading a world:
+- **The world-loading screen draws a map** of the world plan filling in from spawn, in step with the
+  percentage (at 50%, half the map), with a status line. While Terra Towns (0.5.8+) looks for the
+  starting hamlets, the spot being checked is marked and chosen sites stay as gold dots.
+  Single player with a TC world type; other worlds keep vanilla's grid.
+- **World plan** (`plan/WorldPlan`): one coarse scan per world (128-block points out to 32 km from
+  spawn, ~9 s in the background as the overworld loads): ground height and sea or land. The
+  spawn-village planner reads its land from it.
+
+Behaviour carried over from Tectonic, now ours: the ore fix, underground rivers, lava tunnels, the
+snow line (now `[terrain] snow_start_offset`, 256 as before), ocean monuments 30 blocks lower, and a
+guard for chunks saved with a taller world. Changed on purpose: the lava level sits 10 above the
+world floor in the TC Large Biomes and Climates types too (Tectonic matched only noise settings named
+`overworld`, so caves below y -54 there could flood with lava). Not carried over: Tectonic's config
+screen and `/tectonic`, its Terralith/Clifftree overlays and old-chunk blending.
+
+Config and compatibility:
+- `config/tectonic.json` is no longer read; the terrain's values are in the mod.
+- `[caves] cave_depth_fallback_min_y` is gone. `/continental biome_map` no longer warns on the TC
+  world types.
+- Every terrain id is in the `terra_continental` namespace (`resourcepacks/terrain`, one built-in
+  pack). Noises renamed from `tectonic:` keep their old seeds (`terra_continental_renamed_noises.txt`).
+
+For developers: the offline previewer (`preview/continental_terrain.py`, `continental_climate.py`)
+reads this tree's terrain pack directly and matches the game (rig, seed 4151832666630476678: 98.0%
+of land heights exact, 99.1% within 1 block). New `shape_pack.py` keys `warp`, `linear_density`
+and `crest_*`; `tools/python/surface_map.py` renders a generated world from its region files.
+
 ## 0.9.0 — 2026-10-23
 - **Boots without BWG.** The built-in `big_trees` pack overrides 50 BWG tree features and
   `distant_towns` overrides BWG's village set, with no load condition, so without BWG the datapack

@@ -477,9 +477,9 @@ class App(tk.Tk):
 
         def work():
             try:
-                import tectonic_climate as tc
+                import continental_climate as tc
                 instance = os.path.dirname(os.path.abspath(self.folder))
-                sim = tc.TectonicSim(instance=instance)
+                sim = tc.ClimateSim(instance=instance)
                 ids, names = sim.grid(seed, radius, step)
                 n = ids.shape[0]
                 # "offline_" keeps these clear of in-game exports, and radius/step keep

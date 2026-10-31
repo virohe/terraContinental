@@ -1,0 +1,19 @@
+{
+ "feature": "minecraft:ore_diamond_small",
+ "placement": [
+  {
+   "type": "terra_continental:height_stabilized_count",
+   "max_y": {
+    "absolute": 16
+   },
+   "count_per_section": 1.4,
+   "biased_to_bottom": true
+  },
+  {
+   "type": "minecraft:in_square"
+  },
+  {
+   "type": "minecraft:biome"
+  }
+ ]
+}

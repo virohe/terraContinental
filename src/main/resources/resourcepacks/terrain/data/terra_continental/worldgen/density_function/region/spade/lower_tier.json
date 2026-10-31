@@ -1,0 +1,9 @@
+{
+ "type": "minecraft:abs",
+ "argument": {
+  "type": "minecraft:noise",
+  "noise": "terra_continental:region/spade/lower_tier",
+  "xz_scale": 0.35,
+  "y_scale": 0
+ }
+}

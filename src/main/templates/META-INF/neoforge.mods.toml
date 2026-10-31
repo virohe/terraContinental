@@ -92,14 +92,22 @@ config="${mod_id}.bwg.mixins.json"
     ordering="NONE"
     side="BOTH"
 
-# Optional: if Tectonic is present, load AFTER it so our data/tectonic/.../raw_continents.json
-# override wins Tectonic's copy (the terrain seam). Not required — the mod works without Tectonic.
+# terrain_base's density functions use Lithostitched's types (sample_density, condition, noise_slope).
+[[dependencies.${mod_id}]]
+    modId="lithostitched"
+    type="required"
+    versionRange="[1.8,)"
+    ordering="NONE"
+    side="BOTH"
+
+# Terra Continental carries Tectonic's terrain itself since 2026-10-30 (resourcepacks/terrain_base,
+# MIT). Both would override the same overworld files and seed the same noises twice.
 [[dependencies.${mod_id}]]
     modId="tectonic"
-    type="optional"
-    reason="Terra Continental injects its radial continentalness into Tectonic's terrain via the raw_continents seam; must load after Tectonic for the datapack override to win."
-    versionRange="[3.0,)"
-    ordering="AFTER"
+    type="incompatible"
+    reason="Terra Continental includes Tectonic's terrain (absorbed, MIT). Remove Tectonic."
+    versionRange="[0,)"
+    ordering="NONE"
     side="BOTH"
 
 # Features are specific properties of the game environment, that you may want to declare you require. This example declares

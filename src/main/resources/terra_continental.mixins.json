@@ -9,7 +9,12 @@
     "StructurePlacementAccessor",
     "StructurePlacementSpawnMixin",
     "ChunkGeneratorLocateMixin",
-    "WorldPresetsMixin"
+    "WorldPresetsMixin",
+    "terrain.BiomeSnowLineMixin",
+    "terrain.NoiseSeedMixin",
+    "terrain.LavaLevelMixin",
+    "terrain.MonumentDepthMixin",
+    "terrain.OffsetListMixin"
   ],
   "injectors": {
     "defaultRequire": 1
@@ -17,6 +22,7 @@
   "client": [
     "client.CreateWorldScreenMixin",
     "client.WorldCreationUiStateMixin",
-    "client.WorldCreationUiStateOrderMixin"
+    "client.WorldCreationUiStateOrderMixin",
+    "client.LevelLoadingScreenMixin"
   ]
 }

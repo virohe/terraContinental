@@ -1,0 +1,35 @@
+# Noises that were tectonic:<path> before 0.10.0. NoiseSeedMixin and the previewer seed
+# terra_continental:<path> as tectonic:<path> (parameter/<x> as minecraft:<x>), so every seed
+# keeps the land it had. Generated once by the rename; never add to it.
+blend_alpha
+island/continents_a
+island/continents_b
+island/erosion
+island/ridge
+lava_tunnel/offset
+lava_tunnel/ridges
+lava_tunnel/shift_x
+lava_tunnel/shift_z
+mountain_ridges/base
+mountain_ridges/detailed
+mountain_ridges/weathering
+ocean1
+ocean2
+parameter/continentalness
+parameter/erosion
+parameter/ridge
+region/club/badlands_ridge
+region/diamond/dune_base
+region/diamond/dune_offset
+region/diamond/wetland
+region/heart/jungle_pillar
+region/heart/rolling_hills
+region/height_multiplier
+region/selector
+region/spade/lower_tier
+region/spade/upper_tier
+river_lanterns
+underground_river/density_additive
+underground_river/height
+underground_river/roof_sharpness
+underground_river/y_offset

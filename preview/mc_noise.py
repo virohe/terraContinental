@@ -13,6 +13,8 @@ decompiled 1.21.1 classes (see test_parity.py).
 
 import hashlib
 
+import os as _os
+
 import numpy as np
 
 _M64 = (1 << 64) - 1
@@ -116,6 +118,10 @@ _GY = _GRAD[:, 1].copy()
 _GZ = _GRAD[:, 2].copy()
 
 
+# Mth.floor(m / yScale + 1.0E-7F): a float literal widened to double
+_SMEAR_EPS = float(np.float32(1.0e-7))
+
+
 def _smoothstep(t):
     return t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
 
@@ -133,7 +139,9 @@ class ImprovedNoise:
             p[i], p[i + j] = p[i + j], p[i]
         self.p = np.array(p, dtype=np.int32)
 
-    def noise(self, x, y, z):
+    def noise(self, x, y, z, y_scale=0.0, y_max=0.0):
+        """y_scale/y_max are the legacy "smear" arguments BlendedNoise passes: the gradient
+        dot product uses a y snapped down to multiples of y_scale, the fade curve the true y."""
         d0 = np.asarray(x, dtype=np.float64) + self.xo
         d1 = np.asarray(y, dtype=np.float64) + self.yo
         d2 = np.asarray(z, dtype=np.float64) + self.zo
@@ -172,6 +180,13 @@ class ImprovedNoise:
         fx1 = fx - 1.0
         fy1 = fy - 1.0
         fz1 = fz - 1.0
+        if np.any(np.asarray(y_scale) != 0.0):
+            m = np.where((np.asarray(y_max) >= 0.0) & (np.asarray(y_max) < fy), y_max, fy)
+            fy_dot = fy - np.floor(m / y_scale + _SMEAR_EPS) * y_scale
+            fy_s = fy
+            fy, fy1 = fy_dot, fy_dot - 1.0
+        else:
+            fy_s = fy
         d000 = _GX[g000] * fx + _GY[g000] * fy + _GZ[g000] * fz
         d100 = _GX[g100] * fx1 + _GY[g100] * fy + _GZ[g100] * fz
         d010 = _GX[g010] * fx + _GY[g010] * fy1 + _GZ[g010] * fz
@@ -182,7 +197,7 @@ class ImprovedNoise:
         d111 = _GX[g111] * fx1 + _GY[g111] * fy1 + _GZ[g111] * fz1
 
         sx = _smoothstep(fx)
-        sy = _smoothstep(fy)
+        sy = _smoothstep(fy_s)
         sz = _smoothstep(fz)
 
         # Mth.lerp3 (lerp along x, then y, then z)
@@ -247,6 +262,64 @@ class NormalNoise:
                 + self.second.get_value(x * f, y * f, z * f)) * self.value_factor
 
 
+class LegacyPerlinNoise:
+    """PerlinNoise.createLegacyForBlendedNoise: octaves drawn in sequence from one random
+    (useNewFactory = false), all amplitudes 1. getOctaveNoise(0) is the first one drawn."""
+
+    def __init__(self, rng, first_octave, count):
+        j = -first_octave
+        levels = [None] * count
+        levels[j] = ImprovedNoise(rng)
+        for lx in range(j - 1, -1, -1):
+            levels[lx] = ImprovedNoise(rng)
+        self.levels = levels
+
+    def octave(self, i):
+        return self.levels[len(self.levels) - 1 - i]
+
+
+class BlendedNoise:
+    """minecraft:old_blended_noise (BlendedNoise.compute, 1.21.1), vectorised. Seeded from
+    the world's positional random at "minecraft:terrain", as RandomState does."""
+
+    def __init__(self, world_seed, xz_scale, y_scale, xz_factor, y_factor, smear):
+        fork_lo, fork_hi = Xoroshiro.from_seed(world_seed).fork_positional()
+        rng = from_hash_of(fork_lo, fork_hi, "minecraft:terrain")
+        self.min_limit = LegacyPerlinNoise(rng, -15, 16)
+        self.max_limit = LegacyPerlinNoise(rng, -15, 16)
+        self.main = LegacyPerlinNoise(rng, -7, 8)
+        self.xz_mul = 684.412 * xz_scale
+        self.y_mul = 684.412 * y_scale
+        self.xz_factor = xz_factor
+        self.y_factor = y_factor
+        self.smear = smear
+
+    def compute(self, x, y, z):
+        d = np.asarray(x, dtype=np.float64) * self.xz_mul
+        e = np.asarray(y, dtype=np.float64) * self.y_mul
+        f = np.asarray(z, dtype=np.float64) * self.xz_mul
+        g, h, i = d / self.xz_factor, e / self.y_factor, f / self.xz_factor
+        j = self.y_mul * self.smear
+        k = j / self.y_factor
+        n = 0.0
+        o = 1.0
+        for p in range(8):
+            n = n + self.main.octave(p).noise(_wrap(g * o), _wrap(h * o), _wrap(i * o), k * o, h * o) / o
+            o /= 2.0
+        q = (n / 10.0 + 1.0) / 2.0
+        lo = 0.0
+        hi = 0.0
+        o = 1.0
+        for r in range(16):
+            s, t, u = _wrap(d * o), _wrap(e * o), _wrap(f * o)
+            lo = lo + self.min_limit.octave(r).noise(s, t, u, j * o, e * o) / o
+            hi = hi + self.max_limit.octave(r).noise(s, t, u, j * o, e * o) / o
+            o /= 2.0
+        # Mth.clampedLerp; the game skips the side it won't use, which changes nothing here
+        a, b = lo / 512.0, hi / 512.0
+        return np.where(q <= 0.0, a, np.where(q >= 1.0, b, a + q * (b - a))) / 128.0
+
+
 # Vanilla 1.21.1 noise parameters (NoiseData.bootstrap)
 NOISE_PARAMETERS = {
     "minecraft:offset": (-3, [1.0, 1.0, 1.0, 0.0]),
@@ -255,6 +328,8 @@ NOISE_PARAMETERS = {
     "minecraft:continentalness": (-9, [1.0, 1.0, 2.0, 2.0, 2.0, 1.0, 1.0, 1.0, 1.0]),
     "minecraft:erosion": (-9, [1.0, 1.0, 0.0, 1.0, 1.0]),
     "minecraft:ridge": (-7, [1.0, 2.0, 1.0, 0.0, 0.0, 0.0]),
+    # terrain (continental_terrain.py): Tectonic's sloped_cheese reads vanilla's jagged noise
+    "minecraft:jagged": (-16, [1.0] * 16),
     # Terra Continental custom noises (data/terra_continental/worldgen/noise/*.json)
     "terra_continental:tectonic": (-10, [1.0, 0.6, 0.3]),
     "terra_continental:tectonic_break": (-8, [1.0, 0.7]),
@@ -272,4 +347,30 @@ def create_router_noise(world_seed, name):
     """
     fork_lo, fork_hi = Xoroshiro.from_seed(world_seed).fork_positional()
     first_octave, amplitudes = NOISE_PARAMETERS[name]
-    return NormalNoise(from_hash_of(fork_lo, fork_hi, name), first_octave, amplitudes)
+    return NormalNoise(from_hash_of(fork_lo, fork_hi, seed_name(name)), first_octave, amplitudes)
+
+
+def _renamed_noises():
+    path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "src", "main", "resources",
+                         "terra_continental_renamed_noises.txt")
+    with open(path, encoding="utf-8") as fh:
+        return {ln.strip() for ln in fh if ln.strip() and not ln.startswith("#")}
+
+
+_RENAMED = None
+
+
+def seed_name(name):
+    """The id a noise is seeded under, as RenamedNoises.seedId in the mod. The terrain's noises
+    were tectonic:<path> until 0.10.0 and keep those ids' seeds (parameter/<x> as minecraft:<x>,
+    which is how Tectonic seeded them; missing that drew unrelated erosion and ridges, terrain
+    parity 2026-10-23)."""
+    global _RENAMED
+    if _RENAMED is None:
+        _RENAMED = _renamed_noises()
+    ns, _, path = name.partition(":")
+    if ns == "terra_continental" and path in _RENAMED:
+        if path.startswith("parameter/"):
+            return "minecraft:" + path[len("parameter/"):]
+        return "tectonic:" + path
+    return name

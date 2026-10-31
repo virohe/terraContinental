@@ -53,6 +53,22 @@ public class TerraContinental {
     public static final Supplier<MapCodec<SpawnClimateMask>> SPAWN_CLIMATE_MASK =
             DENSITY_FUNCTION_TYPES.register("spawn_climate_mask", () -> SpawnClimateMask.CODEC);
 
+    public static final Supplier<MapCodec<com.terracontinental.density.GiantPeaksFunction>> GIANT_PEAKS =
+            DENSITY_FUNCTION_TYPES.register("giant_peaks", () -> com.terracontinental.density.GiantPeaksFunction.CODEC);
+
+    // From Tectonic (MIT, (c) the Tectonic authors); used by resourcepacks/terrain.
+    public static final Supplier<MapCodec<com.terracontinental.terrain.InvertFunction>> INVERT =
+            DENSITY_FUNCTION_TYPES.register("invert", () -> com.terracontinental.terrain.InvertFunction.CODEC);
+
+    public static final Supplier<MapCodec<com.terracontinental.terrain.ClampBetweenFunction>> CLAMP_BETWEEN =
+            DENSITY_FUNCTION_TYPES.register("clamp_between", () -> com.terracontinental.terrain.ClampBetweenFunction.CODEC);
+
+    public static final DeferredRegister<net.minecraft.world.level.levelgen.placement.PlacementModifierType<?>> PLACEMENT_MODIFIERS =
+            DeferredRegister.create(Registries.PLACEMENT_MODIFIER_TYPE, MOD_ID);
+
+    public static final Supplier<net.minecraft.world.level.levelgen.placement.PlacementModifierType<com.terracontinental.terrain.HeightStabilizedCount>> HEIGHT_STABILIZED_COUNT =
+            PLACEMENT_MODIFIERS.register("height_stabilized_count", () -> () -> com.terracontinental.terrain.HeightStabilizedCount.CODEC);
+
     public static final DeferredRegister<net.minecraft.world.level.levelgen.structure.placement.StructurePlacementType<?>> PLACEMENT_TYPES =
             DeferredRegister.create(Registries.STRUCTURE_PLACEMENT, MOD_ID);
 
@@ -63,6 +79,7 @@ public class TerraContinental {
     public TerraContinental(IEventBus modEventBus, ModContainer modContainer) {
         DENSITY_FUNCTION_TYPES.register(modEventBus);
         PLACEMENT_TYPES.register(modEventBus);
+        PLACEMENT_MODIFIERS.register(modEventBus);
         adoptLegacyConfig("terra_incognita-common.toml", "terra_continental-common.toml");
         modContainer.registerConfig(ModConfig.Type.COMMON, TerraConfig.SPEC, "terra_continental-common.toml");
         // COMMON, not SERVER (0.8.2): a server config loads per world as the server starts, after
@@ -76,6 +93,14 @@ public class TerraContinental {
         NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.VillagesCommand::onServerTick);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerAboutToStartEvent e) ->
                 com.terracontinental.worldtype.WorldTypeCheck.run(e.getServer()));
+        // Start the world plan as the overworld loads, before the spawn area generates: the loading
+        // screen draws it, and the village planner reads its land from it.
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.level.LevelEvent.Load e) -> {
+            if (e.getLevel() instanceof net.minecraft.server.level.ServerLevel sl
+                    && sl.dimension() == net.minecraft.world.level.Level.OVERWORLD) {
+                com.terracontinental.plan.WorldPlan.get(sl);
+            }
+        });
         // Plan the spawn villages off-thread as soon as the server is up. The plan isn't saved, so
         // without this the first new chunk after a restart waits ~15 s for it.
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStartedEvent e) ->
@@ -103,22 +128,17 @@ public class TerraContinental {
     }
 
     /**
-     * Registers the Tectonic seam as an always-active BUILT-IN datapack.
-     *
-     * Plain mod data ({@code data/tectonic/...} in this jar) cannot override Tectonic's
-     * worldgen: Tectonic ships its datapack as a separately registered built-in pack that
-     * stacks ABOVE all {@code mod/*} packs. Registering our seam the same way -- and loading
-     * after Tectonic (see the AFTER ordering in neoforge.mods.toml) -- stacks ours above
-     * Tectonic's, so {@code tectonic:noise/raw_continents} resolves to our radial field.
-     * Always-active, so new worlds need no manual datapack selection. Harmless without
-     * Tectonic (nothing references the overridden function).
+     * Registers the terrain as an always-active BUILT-IN datapack: resourcepacks/terrain, Terra
+     * Continental's own terrain (absorbed from Tectonic, MIT, 2026-10-30; one pack since 0.10.0).
+     * Built in and on TOP so its overrides of minecraft:overworld's noise router win over other
+     * mods' data; mod data in the jar would load below them.
      */
     private static void addPackFinders(AddPackFindersEvent event) {
         if (event.getPackType() == PackType.SERVER_DATA) {
             event.addPackFinders(
-                    ResourceLocation.fromNamespaceAndPath(MOD_ID, "resourcepacks/tectonic_seam"),
+                    ResourceLocation.fromNamespaceAndPath(MOD_ID, "resourcepacks/terrain"),
                     PackType.SERVER_DATA,
-                    Component.literal("Terra Continental x Tectonic seam"),
+                    Component.literal("Terra Continental terrain"),
                     PackSource.BUILT_IN,
                     true,
                     Pack.Position.TOP);

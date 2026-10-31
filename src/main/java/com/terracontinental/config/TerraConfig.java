@@ -26,7 +26,7 @@ public class TerraConfig {
     public static final ModConfigSpec.DoubleValue TEMPERATE_SPAWN_OUTER;
     public static final ModConfigSpec.DoubleValue CAVE_DEPTH_FLOOR_VALUE;
     public static final ModConfigSpec.IntValue CAVE_DEPTH_REFERENCE_Y;
-    public static final ModConfigSpec.IntValue CAVE_DEPTH_FALLBACK_MIN_Y;
+    public static final ModConfigSpec.IntValue SNOW_START_OFFSET;
 
     static {
         BUILDER.push("continent_shaping");
@@ -130,16 +130,21 @@ public class TerraConfig {
 
         CAVE_DEPTH_REFERENCE_Y = BUILDER
                 .comment("Y treated as the 'surface' when measuring the world's vertical span for cave_depth.",
-                         "The scale is derived as floor_value * 128 / (reference_y - tectonic min_y), so the banding",
-                         "rescales automatically when Tectonic's min_y changes - no hand-edited splines.",
+                         "The scale is derived as floor_value * 128 / (reference_y - world floor), so the banding",
+                         "follows the world floor (-512) - no hand-edited splines.",
                          "Sea level (63) is the right answer for almost every world; raise it only if your terrain",
                          "sits far above sea level on average and caves feel like they band too high.")
                 .defineInRange("cave_depth_reference_y", 63, -2048, 2048);
 
-        CAVE_DEPTH_FALLBACK_MIN_Y = BUILDER
-                .comment("Used only if config/tectonic.json cannot be read (Tectonic absent or unparseable).",
-                         "Normally min_y is taken live from Tectonic's own config so the two cannot drift apart.")
-                .defineInRange("cave_depth_fallback_min_y", -64, -2048, 0);
+        BUILDER.pop();
+
+        BUILDER.push("terrain");
+
+        SNOW_START_OFFSET = BUILDER
+                .comment("Blocks by which the height where biomes start to cool (vanilla: y 80) is raised. Snow on",
+                         "mountains starts higher as this grows. 256 is what Tectonic used (cooling from y 336).",
+                         "New chunks only.")
+                .defineInRange("snow_start_offset", 256, 0, 2048);
 
         BUILDER.pop();
 

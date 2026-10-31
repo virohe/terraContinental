@@ -1,0 +1,17 @@
+{
+ "type": "minecraft:shifted_noise",
+ "noise": "terra_continental:parameter/continentalness",
+ "xz_scale": 0.13,
+ "y_scale": 0.0,
+ "shift_x": {
+  "type": "minecraft:mul",
+  "argument1": 0.5,
+  "argument2": "minecraft:shift_x"
+ },
+ "shift_y": 0.0,
+ "shift_z": {
+  "type": "minecraft:mul",
+  "argument1": 0.5,
+  "argument2": "minecraft:shift_z"
+ }
+}
