@@ -53,8 +53,8 @@ import java.util.stream.IntStream;
  *       from every village so far (never closer than {@code min_gap}), so they fill the land evenly
  *       instead of clumping. Among the farthest few, a candidate that offers a village type used
  *       least so far wins, and it gets that type.</li>
- *   <li><b>Checks</b> on each pick: not steep (relief over the village footprint at most
- *       {@code max_relief}), not on water, and the game's own {@code findValidGenerationPoint}
+ *   <li><b>Checks</b> on each pick: not steep (relief within 48 blocks at most {@code max_relief},
+ *       within 128 blocks at most twice that, and no crags), not on water, and the game's own {@code findValidGenerationPoint}
  *       for the assigned type.</li>
  * </ol>
  */
@@ -84,6 +84,10 @@ public final class SpawnVillagePlanner {
     private static final int LAND_STEP = 128;
     private static final int CAND_STEP = 256;
     private static final int[] OFFSETS = {0, -40, 40, -20, 20, -48, 48};
+    private static final int FOOTPRINT_RADIUS = 128, FOOTPRINT_RAYS = 16, FOOTPRINT_MAX_STEP = 12;
+    /** Spots rejected near the centre, further out, by the structure, and passed; and time in checks: logged with the plan. */
+    private static final int[] CHECKS = new int[4];
+    private static final long[] CHECK_NANOS = new long[1];
 
     public record Site(ChunkPos chunk, String type, boolean central, int y, int relief) {
     }
@@ -166,6 +170,8 @@ public final class SpawnVillagePlanner {
         synchronized (SpawnVillagePlanner.class) {
             if (plan != null && planFor == key) return plan;
             long t = System.nanoTime();
+            java.util.Arrays.fill(CHECKS, 0);
+            CHECK_NANOS[0] = 0;
             try {
                 p = compute(level);
             } catch (Throwable e) {
@@ -177,6 +183,8 @@ public final class SpawnVillagePlanner {
             if (p != null) {
                 LOGGER.info("[spawn-villages] {} villages planned on a {} km2 spawn continent in {} ms (gap {} blocks){}",
                         p.sites.size(), Math.round(p.areaKm2), (System.nanoTime() - t) / 1_000_000L, Math.round(p.gapUsed), p.note);
+                LOGGER.info("[spawn-villages] spots checked: {} too steep or wet nearby, {} too rough further out, {} no structure fit, {} passed; {} ms in checks",
+                        CHECKS[0], CHECKS[1], CHECKS[2], CHECKS[3], CHECK_NANOS[0] / 1_000_000L);
                 p.sites.values().forEach(s -> LOGGER.info("[spawn-villages]   {} {} at {}, {} (y {}, relief {})",
                         s.central() ? "central" : "village", s.type(), s.chunk().getMiddleBlockX(), s.chunk().getMiddleBlockZ(), s.y(), s.relief()));
             }
@@ -388,6 +396,18 @@ public final class SpawnVillagePlanner {
     @Nullable
     private static Site check(ServerLevel level, ChunkGenerator gen, BiomeSource bs, RandomState rs, long seed, int sea,
                               Cand c, String type, Map<String, Holder<Structure>> holders, int maxRelief, boolean central) {
+        long t = System.nanoTime();
+        try {
+            return checkSite(level, gen, bs, rs, seed, sea, c, type, holders, maxRelief, central);
+        } finally {
+            CHECK_NANOS[0] += System.nanoTime() - t;
+        }
+    }
+
+    @Nullable
+    private static Site checkSite(ServerLevel level, ChunkGenerator gen, BiomeSource bs, RandomState rs, long seed, int sea,
+                                  Cand c, String type, Map<String, Holder<Structure>> holders, int maxRelief, boolean central) {
+        com.terracontinental.plan.WorldPlan wp = com.terracontinental.plan.WorldPlan.get(level);
         // Steepness over the footprint, measured around the chunk's middle (where the village starts),
         // 7x7 samples out to 48 blocks; any sample on water fails. Audit 2026-10-19: 3x3 samples at the
         // lattice point, 8 blocks off, passed a spot with a 30-block cliff inside the village.
@@ -396,11 +416,30 @@ public final class SpawnVillagePlanner {
         int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE;
         for (int dx : OFFSETS) {
             for (int dz : OFFSETS) {
-                int h = gen.getBaseHeight(mx + dx, mz + dz, Heightmap.Types.WORLD_SURFACE_WG, level, rs);
-                if (h <= sea) return null;
+                int h = height(wp, gen, level, rs, mx + dx, mz + dz);
+                if (h <= sea) { CHECKS[0]++; return null; }
                 lo = Math.min(lo, h);
                 hi = Math.max(hi, h);
-                if (hi - lo > maxRelief) return null;
+                if (hi - lo > maxRelief) { CHECKS[0]++; return null; }
+            }
+        }
+        // The village's whole spread, out to 128 blocks: rings of FOOTPRINT_RAYS points every 32
+        // blocks, at most twice max_relief across them all and no rise of more than
+        // FOOTPRINT_MAX_STEP per 16 blocks between rings along a ray. Playtest 2026-10-31: the
+        // central village (relief 14 within 48 blocks) was built across stone crags 100-128 blocks
+        // out (relief 62, 33 blocks up in 16).
+        int h0 = height(wp, gen, level, rs, mx, mz);
+        int[] prev = new int[FOOTPRINT_RAYS];
+        java.util.Arrays.fill(prev, h0);
+        int flo = Math.min(lo, h0), fhi = Math.max(hi, h0);
+        for (int r = 32; r <= FOOTPRINT_RADIUS; r += 32) {
+            for (int i = 0; i < FOOTPRINT_RAYS; i++) {
+                double a = 2 * Math.PI * i / FOOTPRINT_RAYS;
+                int h = height(wp, gen, level, rs, mx + (int) Math.round(r * Math.cos(a)), mz + (int) Math.round(r * Math.sin(a)));
+                flo = Math.min(flo, h);
+                fhi = Math.max(fhi, h);
+                if (Math.abs(h - prev[i]) > 2 * FOOTPRINT_MAX_STEP || fhi - flo > 2 * maxRelief) { CHECKS[1]++; return null; }
+                prev[i] = h;
             }
         }
         Holder<Structure> holder = holders.get(type);
@@ -409,8 +448,24 @@ public final class SpawnVillagePlanner {
         Structure.GenerationContext ctx = new Structure.GenerationContext(level.registryAccess(), gen, bs, rs,
                 level.getServer().getStructureManager(), seed, chunk, level, s.biomes()::contains);
         var stub = s.findValidGenerationPoint(ctx);
-        if (stub.isEmpty()) return null;
+        if (stub.isEmpty()) { CHECKS[2]++; return null; }
+        CHECKS[3]++;
         return new Site(chunk, type, central, stub.get().position().getY(), hi - lo);
+    }
+
+    /**
+     * Surface height for the footprint checks: the world plan's estimate (within ~1 block, and
+     * microseconds) when there is a plan, else getBaseHeight (50-65 ms a call: with it, rejecting
+     * the crag sites took the planner from 97 s to 265 s on the test seed). Water reads as sea level,
+     * as WORLD_SURFACE_WG does.
+     */
+    private static int height(@Nullable com.terracontinental.plan.WorldPlan wp, ChunkGenerator gen, ServerLevel level,
+                              RandomState rs, int x, int z) {
+        int h = wp == null ? com.terracontinental.plan.WorldPlan.NO_HEIGHT : wp.estimateHeight(x, z);
+        if (h == com.terracontinental.plan.WorldPlan.NO_HEIGHT) {
+            return gen.getBaseHeight(x, z, Heightmap.Types.WORLD_SURFACE_WG, level, rs);
+        }
+        return Math.max(h, gen.getSeaLevel());
     }
 
     private static double dist2(Cand c, double x, double z) {

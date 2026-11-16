@@ -5,6 +5,19 @@ reconstructed on 2026-09-27; everything from
 0.0.1 to 0.7.3 landed in one catch-up commit (`15597b7`) because it had not been committed as
 it happened. Earlier history is in `git log`.
 
+## 0.10.1 — 2026-10-31
+- **Fewer Cobblemon structures**: new `[cobblemon] cobblemon_spacing_multiplier` (default 2.0, on top of
+  the global 1.5) spaces Cobblemon's habitats, ruins, gimmi towers, fishing boats and shipwreck coves
+  further apart: about a quarter as many. Their own spacing is 15-30 chunks, so ruins and habitats
+  turned up every few hundred blocks (playtest 2026-10-31). Matched by structure-set salt (Cobblemon 1.8.4).
+- **Spawn villages stay off crags**: the planner checks a village's whole spread, out to 128 blocks (rings
+  every 32 blocks), not just 48: at most twice `max_relief` across it and no rise steeper than 12 in 16.
+  The test seed's central village had been built across stone crags 100-128 blocks out (relief 62); it
+  now sits on flat ground (relief 13), and Skyris moved off a 77-block slope.
+- **Faster village planning**: the footprint checks read the world plan's height estimate (within ~1
+  block, microseconds) instead of getBaseHeight (50-65 ms a call). Test seed: 97 s -> 29 s, the same
+  sites from run to run. The planner logs how many spots each check rejected.
+
 ## 0.10.0 — 2026-10-30
 Terra Continental generates its own terrain. Tectonic's terrain is absorbed into the mod (MIT,
 credited in `resourcepacks/terrain/NOTICE.txt`), reshaped, and no longer needs Tectonic installed.

@@ -110,6 +110,7 @@ public final class WorldPlan implements PlanPreview {
             Climate.Sampler sampler = rs.sampler();
             DensityFunction ground = seeded(level.registryAccess().registryOrThrow(Registries.DENSITY_FUNCTION)
                     .getHolderOrThrow(GROUND_DEPTH).value(), rs);
+            this.ground = ground;
             // Rings of 8 at a time: enough work per batch to keep the cores busy, small enough that
             // the loading screen sees the map grow.
             for (int r0 = 0; r0 <= half; r0 += 8) {
@@ -215,6 +216,20 @@ public final class WorldPlan implements PlanPreview {
     public boolean isKnown(int bx, int bz) {
         int i = index(bx, bz);
         return i >= 0 && kind[i] != 0;
+    }
+
+    private volatile DensityFunction ground;
+
+    /**
+     * Estimated ground height at any column, the way the plan measures its points (128 x depth at
+     * y 0: no 3-D noise), or {@link #NO_HEIGHT} before planning starts. Microseconds a call, where
+     * getBaseHeight costs 50-65 ms in this pack; within ~1 block of it (previewer, seed
+     * 4151832666630476678: mean -0.6, sd 0.5 over village footprints). Thread-safe.
+     */
+    public int estimateHeight(int bx, int bz) {
+        DensityFunction g = ground;
+        return g == null ? NO_HEIGHT
+                : (int) Math.round(128.0 * g.compute(new DensityFunction.SinglePointContext(bx, 0, bz)));
     }
 
     /** Estimated ground height at the nearest point, or {@link #NO_HEIGHT}. */

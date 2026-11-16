@@ -38,6 +38,16 @@ public abstract class RandomSpreadStructurePlacementMixin {
     private static final int TERRA_CONTINENTAL$SALT_BWG_VILLAGES = 437845874;
 
     /**
+     * Salts of Cobblemon 1.8.4's structure_sets (habitats, the ruins sets, gimmi towers, fishing
+     * boats, shipwreck coves). They get cobblemon_spacing_multiplier on top of the global one:
+     * playtest 2026-10-31 found ruins and habitats every few hundred blocks, as their own spacing
+     * is 15-30 chunks. A salt Cobblemon changes in a later version simply stops matching.
+     */
+    private static final java.util.Set<Integer> TERRA_CONTINENTAL$SALTS_COBBLEMON = java.util.Set.of(
+            94221222, 1892293476, 1027497744, 1615697744, 1695297744, 1695780755, 1628364155,
+            1192837015, 94251327);
+
+    /**
      * The full constructor: the codec and the short constructor both end up here, so this
      * scales every placement exactly once. The salt is already set (the super constructor ran).
      */
@@ -65,6 +75,8 @@ public abstract class RandomSpreadStructurePlacementMixin {
                 if (s == TERRA_CONTINENTAL$SALT_VANILLA_VILLAGES
                         || s == TERRA_CONTINENTAL$SALT_BWG_VILLAGES) {
                     mult *= TerraStructureConfig.VILLAGE_SPACING_MULTIPLIER.get();
+                } else if (TERRA_CONTINENTAL$SALTS_COBBLEMON.contains(s)) {
+                    mult *= TerraStructureConfig.COBBLEMON_SPACING_MULTIPLIER.get();
                 }
                 return mult;
             }

@@ -13,6 +13,7 @@ public class TerraStructureConfig {
     public static final ModConfigSpec SPEC;
 
     public static final ModConfigSpec.DoubleValue STRUCTURE_SPACING_MULTIPLIER;
+    public static final ModConfigSpec.DoubleValue COBBLEMON_SPACING_MULTIPLIER;
     public static final ModConfigSpec.DoubleValue VILLAGE_SPACING_MULTIPLIER;
     public static final ModConfigSpec.BooleanValue SPAWN_VILLAGES_ENABLED;
     public static final ModConfigSpec.IntValue SPAWN_VILLAGE_COUNT;
@@ -43,6 +44,15 @@ public class TerraStructureConfig {
                 .defineInRange("village_spacing_multiplier", 1.0, 0.1, 20.0);
         BUILDER.pop();
 
+        BUILDER.push("cobblemon");
+        COBBLEMON_SPACING_MULTIPLIER = BUILDER
+                .comment("EXTRA spacing multiplier for Cobblemon's structures (habitats, ruins, gimmi towers, fishing",
+                         "boats, shipwreck coves), on top of structure_spacing_multiplier. Their own spacing is 15-30",
+                         "chunks, so at 1.0 ruins and habitats turn up every few hundred blocks (playtest 2026-10-31).",
+                         "Count scales as 1/multiplier^2: 2.0 = a quarter as many, 3.0 = a ninth. Default: 2.0")
+                .defineInRange("cobblemon_spacing_multiplier", 2.0, 0.1, 20.0);
+        BUILDER.pop();
+
         BUILDER.push("spawn_villages");
         SPAWN_VILLAGES_ENABLED = BUILDER
                 .comment("Plan the spawn continent's villages instead of leaving them to the village grids: a central",
@@ -60,7 +70,8 @@ public class TerraStructureConfig {
                 .defineInRange("min_gap", 3000, 500, 20000);
         SPAWN_VILLAGE_MAX_RELIEF = BUILDER
                 .comment("Steepest ground a spawn-continent village may start on: the most the surface may rise or fall",
-                         "across its ~100-block footprint (7x7 samples). Height above sea level is not limited.")
+                         "within 48 blocks of its centre (7x7 samples); out to 128 blocks the limit is twice this, and no",
+                         "16-block step may rise more than 12. Height above sea level is not limited.")
                 .defineInRange("max_relief", 14, 2, 200);
         SPAWN_VILLAGE_THEMED_MAX = BUILDER
                 .comment("At most this many spawn-continent villages may be climate villages (desert, savanna, snowy",
