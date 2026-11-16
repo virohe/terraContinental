@@ -5,6 +5,51 @@ reconstructed on 2026-09-27; everything from
 0.0.1 to 0.7.3 landed in one catch-up commit (`15597b7`) because it had not been committed as
 it happened. Earlier history is in `git log`.
 
+## 0.11.0 — 2026-11-01
+Snow and ice as a feature, with tree and structure lines (playtest 2026-10-31: snow came with the
+peak biomes as a palette from y ~250, cliffs included; ice everywhere on the peaks; trees to y ~1,000).
+One snow line drives it all: `terra_continental:alpine/snow_line` in the terrain pack, y 500 wandering
++-40 over ~1.5 km (picked from 400-650 previews).
+- **Biomes by altitude**: the biome router's erosion is the peaks value above the snow line and kept
+  out of the peaks and slopes bands below it, so frozen/jagged/howling peaks cover only ground above
+  the line (new density function `terra_continental:at_y` reads the height estimate). Replaces the
+  giant-only pull toward peaks.
+- **Snowfall** cools from the snow line, not a fixed y 336 (`[terrain] snow_start_offset` is gone).
+- **Alpine surface pass** (`terra_continental:alpine_surface`, top-layer step, every overworld biome):
+  snow pack on ground gentler than ~50 degrees, bare stone on steeper faces, the line 25 lower on north
+  faces and 25 higher on south faces; glacier ice (packed, blue at the core) in high hollows and on high
+  flats, tongues down valley floors to 120 below the line; below the line no snow except in biomes
+  snowy at sea level. Plants go with the ground the pass changes (playtest 2026-11-01: grass and
+  ferns stood on snow, stone and ice, since the pass runs after vegetation), except a quarter of the
+  flowers on gentle ground in the 40 blocks above the line, which keep their grass: alpine flowers.
+  Main range crest: plants on snow 5,530 to 31, on ice 690 to 2, on rock above y 450 2,480 to 108.
+  Debris too (same playtest): leaf piles, clover, mushrooms, succulents, bushes and berry and mint
+  plants, which the heightmap stops on; and BWG's own ground (overgrown and podzol dacite, lush grass,
+  mossy and rocky stone) now counts as ground, so it turns to snow or rock instead of staying green.
+  Crest: mushrooms on snow 423 to 8; leaf piles, succulents, bushes, mints 0.
+- **Tree line** and **structure line**: no worldgen trees (vanilla, BWG/Oh The Trees You'll Grow and Cobblemon's apricorns)
+  and no surface structures start above `[alpine] tree_line_gap` / `structure_line_gap` (60) below the
+  snow line; the tree line thins out over 20 blocks. Saplings and underground structures unaffected.
+- Test seed, giant and main range regenerated: peak biomes from the y 500 band up (were from ~250); no
+  snow below 450; above 500, 44-67% snow and 22-78% bare rock (was 3-8% rock); trees 0% from 500 up
+  (were 13-16% at ~900); ice 2-8% (was 10-27%); structure starts on high ground 6 -> 1 (that one below
+  its local line).
+
+- **Loading-map markers are small, one shape per meaning** (the user, 2026-10-31: "small
+  indicators, not map-blockers"). They're drawn in screen pixels, not GUI pixels: at GUI scale 4
+  a hamlet square was 28 pixels and covered the spawn continent. Spawn is a white dot, the spot
+  being checked a thin pulsing ring, a found hamlet site a hollow gold square that fills in once
+  the hamlet is built (`LoadingStatus.built`, reported by Terra Towns' next release), and the spawn continent's
+  planned villages are terracotta diamonds. The map's shading is unchanged (user's call).
+- **The loading map plays in order, with a zoom per hamlet** (the user, 2026-10-31): the map fills
+  in, then the villages pop in one by one ("Placing villages"), then Terra Towns' hamlet search
+  shows. For each hamlet being built the map zooms in about 4x on it (`LoadingStatus.building`),
+  holds until it's built, zooms back out to the whole map, then in on the next. The animation
+  trails the server and never holds it up.
+- **The loading screen opens on the map's frame**, not vanilla's small chunk grid that snapped to
+  the map a few frames later: a TC world is recognised from the server's registries before the
+  overworld exists (`PlanPreviews.expected`).
+
 ## 0.10.2 — 2026-11-01
 - **The spawn continent's coast, for Terra Towns' hamlets**: the spawn-village plan traces the
   continent's outer coast as a closed loop on its 128-block land lattice (`Plan.coast()`), and

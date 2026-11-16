@@ -63,6 +63,17 @@ public class TerraContinental {
     public static final Supplier<MapCodec<com.terracontinental.terrain.ClampBetweenFunction>> CLAMP_BETWEEN =
             DENSITY_FUNCTION_TYPES.register("clamp_between", () -> com.terracontinental.terrain.ClampBetweenFunction.CODEC);
 
+    public static final Supplier<MapCodec<com.terracontinental.terrain.AtYFunction>> AT_Y =
+            DENSITY_FUNCTION_TYPES.register("at_y", () -> com.terracontinental.terrain.AtYFunction.CODEC);
+
+    public static final DeferredRegister<net.minecraft.world.level.levelgen.feature.Feature<?>> FEATURES =
+            DeferredRegister.create(Registries.FEATURE, MOD_ID);
+
+    /** Snow pack, bare rock and glaciers around the snow line (playtest 2026-10-31). */
+    public static final Supplier<com.terracontinental.alpine.AlpineSurfaceFeature> ALPINE_SURFACE =
+            FEATURES.register("alpine_surface", () -> new com.terracontinental.alpine.AlpineSurfaceFeature(
+                    net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration.CODEC));
+
     public static final DeferredRegister<net.minecraft.world.level.levelgen.placement.PlacementModifierType<?>> PLACEMENT_MODIFIERS =
             DeferredRegister.create(Registries.PLACEMENT_MODIFIER_TYPE, MOD_ID);
 
@@ -80,6 +91,7 @@ public class TerraContinental {
         DENSITY_FUNCTION_TYPES.register(modEventBus);
         PLACEMENT_TYPES.register(modEventBus);
         PLACEMENT_MODIFIERS.register(modEventBus);
+        FEATURES.register(modEventBus);
         adoptLegacyConfig("terra_incognita-common.toml", "terra_continental-common.toml");
         modContainer.registerConfig(ModConfig.Type.COMMON, TerraConfig.SPEC, "terra_continental-common.toml");
         // COMMON, not SERVER (0.8.2): a server config loads per world as the server starts, after
@@ -99,6 +111,7 @@ public class TerraContinental {
             if (e.getLevel() instanceof net.minecraft.server.level.ServerLevel sl
                     && sl.dimension() == net.minecraft.world.level.Level.OVERWORLD) {
                 com.terracontinental.plan.WorldPlan.get(sl);
+                com.terracontinental.alpine.Alpine.load(sl);
             }
         });
         // Plan the spawn villages off-thread as soon as the server is up. The plan isn't saved, so

@@ -433,6 +433,7 @@ public final class SpawnVillagePlanner {
         p.sites.put(s.chunk().toLong(), s);
         used.merge(s.type(), 1, Integer::sum);
         chosen.add(new double[]{s.chunk().getMiddleBlockX(), s.chunk().getMiddleBlockZ()});
+        com.terracontinental.plan.LoadingStatus.village(s.chunk().getMiddleBlockX(), s.chunk().getMiddleBlockZ());
     }
 
     private static int themedMax;

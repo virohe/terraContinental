@@ -1,0 +1,6 @@
+{
+ "type": "lithostitched:add_features",
+ "biomes": "#minecraft:is_overworld",
+ "features": "terra_continental:alpine_surface",
+ "step": "top_layer_modification"
+}

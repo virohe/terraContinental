@@ -11,6 +11,8 @@
     "ChunkGeneratorLocateMixin",
     "WorldPresetsMixin",
     "terrain.BiomeSnowLineMixin",
+    "alpine.TreeLineMixin",
+    "alpine.StructureLineMixin",
     "terrain.NoiseSeedMixin",
     "terrain.LavaLevelMixin",
     "terrain.MonumentDepthMixin",

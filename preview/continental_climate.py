@@ -102,6 +102,9 @@ class ClimateSim:
             "terra_continental:clamp_between": self._clamp_between,
             "terra_continental:radial_falloff": self._radial_falloff,
             "terra_continental:spawn_climate_mask": self._spawn_climate_mask,
+            # The argument at a fixed y (the biome router's height estimate, 2026-10-31).
+            "terra_continental:at_y": lambda ctx, node: mc_dfi.evaluate(node["argument"], mc_dfi.Context(
+                ctx.reg, ctx.seed, ctx.X, ctx.Z, ctx.custom, float(node.get("y", 0)))),
         }
 
         dump = biome_dump or _os.path.join(instance, "terra_biome_dump.json")

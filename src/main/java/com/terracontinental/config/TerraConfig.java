@@ -26,7 +26,8 @@ public class TerraConfig {
     public static final ModConfigSpec.DoubleValue TEMPERATE_SPAWN_OUTER;
     public static final ModConfigSpec.DoubleValue CAVE_DEPTH_FLOOR_VALUE;
     public static final ModConfigSpec.IntValue CAVE_DEPTH_REFERENCE_Y;
-    public static final ModConfigSpec.IntValue SNOW_START_OFFSET;
+    public static final ModConfigSpec.IntValue TREE_LINE_GAP;
+    public static final ModConfigSpec.IntValue STRUCTURE_LINE_GAP;
 
     static {
         BUILDER.push("continent_shaping");
@@ -138,13 +139,15 @@ public class TerraConfig {
 
         BUILDER.pop();
 
-        BUILDER.push("terrain");
+        BUILDER.push("alpine");
 
-        SNOW_START_OFFSET = BUILDER
-                .comment("Blocks by which the height where biomes start to cool (vanilla: y 80) is raised. Snow on",
-                         "mountains starts higher as this grows. 256 is what Tectonic used (cooling from y 336).",
-                         "New chunks only.")
-                .defineInRange("snow_start_offset", 256, 0, 2048);
+        TREE_LINE_GAP = BUILDER
+                .comment("How far below the snow line (terra_continental:alpine/snow_line in the terrain pack: y 500,",
+                         "wandering +-40) worldgen trees stop, thinning out over 20 blocks. New chunks only.")
+                .defineInRange("tree_line_gap", 60, 0, 1000);
+        STRUCTURE_LINE_GAP = BUILDER
+                .comment("How far below the snow line surface structures stop starting. New chunks only.")
+                .defineInRange("structure_line_gap", 60, 0, 1000);
 
         BUILDER.pop();
 

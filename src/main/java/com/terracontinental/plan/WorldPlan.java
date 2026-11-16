@@ -48,6 +48,8 @@ public final class WorldPlan implements PlanPreview {
     /** Reach of the plan from (0, 0), in blocks: the spawn continent and its neighbours. */
     public static final int REACH = 32_768;
     public static final int NO_HEIGHT = Short.MIN_VALUE;
+    /** Points along each side of the plan (its preview's cells). */
+    public static final int CELLS = 2 * (REACH / STEP) + 1;
 
     private static final ResourceKey<DensityFunction> GROUND_DEPTH = ResourceKey.create(
             Registries.DENSITY_FUNCTION, ResourceLocation.fromNamespaceAndPath("terra_continental", "depth"));
@@ -158,7 +160,7 @@ public final class WorldPlan implements PlanPreview {
     }
 
     /** A registered density function, seeded the way RandomState wires the noise router. */
-    private static DensityFunction seeded(DensityFunction f, RandomState rs) {
+    public static DensityFunction seeded(DensityFunction f, RandomState rs) {
         Map<DensityFunction, DensityFunction> wrapped = new HashMap<>();
         return f.mapAll(new DensityFunction.Visitor() {
             @Override

@@ -1,0 +1,13 @@
+{
+ "_comment": "Estimated surface height: 128 x depth at y 0, the world plan's estimate (within ~1 block of getBaseHeight, no 3-D noise).",
+ "type": "minecraft:flat_cache",
+ "argument": {
+  "type": "minecraft:mul",
+  "argument1": 128.0,
+  "argument2": {
+   "type": "terra_continental:at_y",
+   "y": 0,
+   "argument": "terra_continental:depth"
+  }
+ }
+}
