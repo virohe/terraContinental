@@ -57,6 +57,10 @@ config="${mod_id}.mixins.json"
 [[mixins]]
 config="${mod_id}.bwg.mixins.json"
 
+# Optional-mod mixins (Xaero's World Map), client only; absent mod = clean no-op.
+[[mixins]]
+config="${mod_id}.maps.mixins.json"
+
 # The [[accessTransformers]] block allows you to declare where your AT file is.
 # If this block is omitted, a fallback attempt will be made to load an AT from META-INF/accesstransformer.cfg
 #[[accessTransformers]]

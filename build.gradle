@@ -27,7 +27,11 @@ sourceSets.main.resources {
 }
 
 repositories {
-    // Add here additional repositories if required by some of the dependencies below.
+    // Optional integrations (compile only, never bundled): the exact files the pack's instance runs.
+    exclusiveContent {
+        forRepository { maven { url "https://cursemaven.com" } }
+        filter { includeGroup "curse.maven" }
+    }
 }
 
 base {
@@ -118,6 +122,11 @@ configurations {
 }
 
 dependencies {
+    // Map integrations (client): Xaero's World Map 1.47.0, Distant Horizons 3.3.3, JourneyMap 6.0.9.
+    compileOnly "curse.maven:xaeros-world-map-317780:9067277"
+    compileOnly "curse.maven:distant-horizons-508933:9004764"
+    compileOnly "curse.maven:journeymap-32274:8923668"
+
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"

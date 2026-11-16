@@ -291,8 +291,12 @@ public final class WorldPlan implements PlanPreview {
         int i = cz * n + cx;
         byte k = kind[i];
         if (k == 0) return 0;
-        int h = height[i];
-        if (k == 2) {
+        return color(k == 2, height[i], sea);
+    }
+
+    /** The loading map's colour for ground at height {@code h}: also the world atlas's (ContinentAtlas). */
+    public static int color(boolean ocean, int h, int sea) {
+        if (ocean) {
             // Ocean by depth below sea level: shelf to abyss (the floor reaches ~400 below sea).
             double t = clamp((sea - h) / 400.0);
             return argb(lerp(0x4E, 0x12, t), lerp(0x8F, 0x2B, t), lerp(0xC4, 0x5C, t));

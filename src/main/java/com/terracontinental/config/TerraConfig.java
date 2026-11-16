@@ -36,6 +36,7 @@ public class TerraConfig {
     public static final ModConfigSpec.IntValue TREE_LINE_GAP;
     public static final ModConfigSpec.IntValue STRUCTURE_LINE_GAP;
     public static final ModConfigSpec.IntValue DRY_START_MAX_WATER;
+    public static final ModConfigSpec.BooleanValue HORIZON_LODS;
 
     static {
         BUILDER.push("continent_shaping");
@@ -191,6 +192,14 @@ public class TerraConfig {
                          "New chunks only.")
                 .defineInRange("dry_start_max_water", 1, -1, 64);
 
+        BUILDER.pop();
+
+        BUILDER.push("distant_horizons");
+        HORIZON_LODS = BUILDER
+                .comment("Distant Horizons draws land nobody has generated from the world plan's estimate (fast;",
+                         "real chunks replace it as they are made) instead of generating chunks for its LODs.",
+                         "Needs Distant Horizons' generation on (its generationMaxChunkRadius 0 or large).")
+                .define("horizon_lods", true);
         BUILDER.pop();
 
         SPEC = BUILDER.build();

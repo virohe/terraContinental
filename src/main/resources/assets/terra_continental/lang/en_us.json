@@ -1,5 +1,6 @@
 {
   "generator.terra_continental.large_biomes": "TC: Large Biomes",
   "generator.terra_continental.temperate": "TC: Temperate",
-  "generator.terra_continental.climates": "TC: Climates"
+  "generator.terra_continental.climates": "TC: Climates",
+  "item.terra_continental.world_atlas": "World Atlas"
 }

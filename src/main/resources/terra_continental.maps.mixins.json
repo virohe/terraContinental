@@ -1,0 +1,12 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "com.terracontinental.mixin.maps",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "XaeroWorldSaveMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

@@ -91,7 +91,21 @@ public class TerraContinental {
     public static final Supplier<net.minecraft.world.level.levelgen.structure.placement.StructurePlacementType<com.terracontinental.spawn.PerContinentPlacement>> PER_CONTINENT_PLACEMENT =
             PLACEMENT_TYPES.register("per_continent", () -> () -> com.terracontinental.spawn.PerContinentPlacement.CODEC);
 
+    public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(MOD_ID);
+    /** The World Atlas: the whole world's continents, for admins (/continental world-map). */
+    public static final net.neoforged.neoforge.registries.DeferredItem<com.terracontinental.atlas.WorldAtlasItem> WORLD_ATLAS =
+            ITEMS.register("world_atlas", com.terracontinental.atlas.WorldAtlasItem::new);
+
     public TerraContinental(IEventBus modEventBus, ModContainer modContainer) {
+        ITEMS.register(modEventBus);
+        modEventBus.addListener((net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent e) ->
+                e.registrar("1").optional().playToClient(com.terracontinental.atlas.WorldMapPayload.TYPE,
+                        com.terracontinental.atlas.WorldMapPayload.CODEC,
+                        (payload, ctx) -> ctx.enqueueWork(() -> {
+                            if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) {
+                                com.terracontinental.client.WorldMapClient.open(payload);
+                            }
+                        })));
         DENSITY_FUNCTION_TYPES.register(modEventBus);
         PLACEMENT_TYPES.register(modEventBus);
         PLACEMENT_MODIFIERS.register(modEventBus);
@@ -102,6 +116,15 @@ public class TerraContinental {
         // the world's structure placements are built, so the spacing multipliers read "not
         // loaded" and never applied (TI-102). A common config is loaded before any world.
         modContainer.registerConfig(ModConfig.Type.COMMON, TerraStructureConfig.SPEC, "terra_continental-structures.toml");
+        modContainer.registerConfig(ModConfig.Type.CLIENT, com.terracontinental.config.TerraClientConfig.SPEC, "terra_continental-client.toml");
+        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) com.terracontinental.client.ClientSetup.init();
+        if (net.neoforged.fml.ModList.get().isLoaded("distanthorizons")) {
+            try {
+                com.terracontinental.atlas.HorizonLods.register();
+            } catch (Throwable t) {
+                LOGGER.warn("[horizon] Distant Horizons' API isn't usable: {}", t.toString());
+            }
+        }
         modEventBus.addListener(TerraContinental::addPackFinders);
         NeoForge.EVENT_BUS.addListener(DumpBiomesCommand::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(BiomeMapCommand::onRegisterCommands);
@@ -109,6 +132,10 @@ public class TerraContinental {
         NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.VillagesCommand::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.VillagesCommand::onServerTick);
         NeoForge.EVENT_BUS.addListener(com.terracontinental.spawn.VillagePoolCheck::onServerStarted);
+        NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.ContinentsCommand::onRegisterCommands);
+        NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.ContinentsCommand::onServerTick);
+        NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.ContinentsCommand::onServerStarted);
+        NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.ContinentsCommand::onServerStopping);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerAboutToStartEvent e) ->
                 com.terracontinental.worldtype.WorldTypeCheck.run(e.getServer()));
         // Start the world plan as the overworld loads, before the spawn area generates: the loading

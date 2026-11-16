@@ -5,6 +5,63 @@ reconstructed on 2026-09-27; everything from
 0.0.1 to 0.7.3 landed in one catch-up commit (`15597b7`) because it had not been committed as
 it happened. Earlier history is in `git log`.
 
+## 0.14.0 — 2026-11-16
+
+- **Continent atlas and names** (user, 2026-11-16). The whole overworld out to the soft border plus two
+  transition widths (340 km across with the pack's config) on a 512-block lattice: land or sea (the loading
+  map's test), ground height, and the land split into 4-connected landmasses. One of 25 km2 or more is a
+  continent; the names are Cobblemon's starter regions, shuffled by the seed and handed out nearest the
+  origin first ("Continent 11" and on past ten). ~11 s on 16 threads, then kept in
+  `<world>/data/terra_continental_atlas.dat`. First rig world: 11 continents and 340 islands.
+- **`/continental continents`** lists them; **`/continental pregenerate occupied|<name> [lods]`** generates a
+  whole continent: its land re-scanned at 128 blocks, the small islands whose coast is within 2 km, and a
+  512-block sea margin (user: an ocean horizon), region by region outward. Its own chunk driver (Chunky
+  crashes single-player with Distant Horizons): FULL-status tickets with a cap on chunks in flight (default
+  4 per core; `/continental pregenerate parallel <n>`), progress saved every 30 s and resumed when the world
+  loads; `status`, `pause`, `resume`, `cancel`. When the chunks are done and Distant Horizons is installed, it
+  starts DH's own pregen over the continent's box for the LODs (`lods` false skips it). Same command in game
+  and over RCON; replies that come after the command returns are also logged, for RCON.
+  The chunk requests go through `getChunkFutureMainThread` (`ServerChunkCacheInvoker`): the public
+  `getChunkFuture` blocks the server thread until the chunk is done when called from it, which held the
+  first rig run to 2.8 chunks/s. Fixed: ~20 chunks/s on all-land ground, the 15 C2ME workers saturated
+  (the server thread at 3%), so it is as fast as the terrain allows.
+
+- **The World Atlas** (user, 2026-11-16): `/continental world-map [players]` gives an item that looks like a
+  filled map; an admin who uses it gets the atlas (~90 KB) and a screen with the whole world in the loading
+  map's colours, hill-shaded, coasts outlined, every continent named (a check once it's pregenerated), you
+  as a dot. Drag to pan, scroll to zoom, hover for what's under the cursor; click a continent for its land,
+  size and centre, and "Pregenerate" runs `/continental pregenerate <name>`. Anyone else is told only an
+  admin can read it. The command also writes `<world>/terra_continental_world_map.png`, the console and RCON
+  route to the same picture. Labels that would overlap move a line up or down.
+
+- **An explorer's map** (user, 2026-11-16: the shipped map shows none of the pregenerated terrain; the
+  other map mod is the debug view). Xaero's World Map ships: in single-player it normally builds its map
+  from the world save, every generated chunk, which is the "renders areas I never explored" the user had
+  seen from map mods; `XaeroWorldSaveMixin` turns that off, so it maps only chunks your client loads, as on
+  a server (client config `maps.xaero_explore_only`). With JourneyMap installed, single-player worlds are
+  auto-mapped from the save ten seconds after joining ("missing regions"): the debug map
+  (`maps.journeymap_debug_automap`).
+- **Seeing far maps far** (user: it's unfair to make a player walk a continent to fill a map when the LODs
+  show the land). `MapReveal`: line of sight from your eye over Distant Horizons' LODs, out to
+  `512 + 160 x sqrt(your height above the land around you)` blocks (~0.75 km on flat ground, ~3 km from 240 m
+  up, capped at 8 km), sketched into Xaero's map at 32 blocks a pixel; through a spyglass, what you look at
+  sharpens to 8 blocks a pixel after a dwell that grows with distance, a few chunks a look. Only going
+  there gives full detail: Xaero's own writer replaces a sketch with the real chunk, and a sketch never
+  covers explored ground (a marker in Xaero's saved per-tile byte). LODs are read at the sketch's detail
+  level (one DH section fetch covers 2 km); the public per-column lookup took ~13 ms a column. Smoke test:
+  6,140 chunks sketched from 240 m up in one survey (39 s the first time while DH loads, then milliseconds).
+  Client config `[reveal]`.
+- **Horizon LODs** (user: neighbouring continents on the horizon). `HorizonLods` is a Distant Horizons
+  world generator for land nobody has generated: height from the world plan's estimate on a coarse grid,
+  sea or land from that height, a top block by biome and altitude, ~3 µs a column (DH's own generators ran
+  1-2 chunks/s on this terrain). Chunks on disk are left to DH; real chunks replace the estimate as they are
+  made. Needs DH generation on (`generationMaxChunkRadius` 0 and `chunkGeneratorMode` not
+  PRE_EXISTING_ONLY); `[distant_horizons] horizon_lods`. Columns stay at y >= 0 (DH's packing wrapped
+  negative bottoms) and 32 blocks deep.
+- Dev: built against NeoForge 21.1.247 (the instance's); `client/SmokeTest` (`-Dterra_continental.smoke=<world>`)
+  drives a real client through the map features and screenshots each; `tools/python/launch_instance.py`
+  starts the instance's production client offline for it.
+
 ## 0.13.0 — 2026-11-15
 0.12.0 was never released on its own; its changes are part of this release and listed at the end
 of this section.
