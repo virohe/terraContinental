@@ -135,6 +135,74 @@ public final class SpawnVillagePlanner {
         public Site siteAt(int chunkX, int chunkZ) {
             return sites.get(ChunkPos.asLong(chunkX, chunkZ));
         }
+
+        private int[] coast;
+
+        /**
+         * The continent's outer coast as a closed loop of its land cells, in order round the continent:
+         * {x, z, seaDx, seaDz} per cell, the sea direction pointing at the off-continent neighbour the trace
+         * passed. Terra Towns spaces its starting hamlets along it (the user, 2026-10-31: its own 32-block
+         * biome trace of the coast ran 120000 cells without closing and bunched all eight hamlets in the
+         * west). Lakes inside the continent aren't traced; the edge of the plan counts as coast.
+         */
+        public synchronized int[] coast() {
+            if (coast == null) coast = traceCoast();
+            return coast;
+        }
+
+        /** Clockwise Moore neighbours, starting west. */
+        private static final int[][] MOORE = {{-1, 0}, {-1, -1}, {0, -1}, {1, -1}, {1, 0}, {1, 1}, {0, 1}, {-1, 1}};
+
+        private boolean landCell(int ix, int iz) {
+            return ix >= 0 && iz >= 0 && ix < n && iz < n && land[iz * n + ix];
+        }
+
+        /** Moore-neighbour trace from the first land cell in raster order (its west neighbour is off the land). */
+        private int[] traceCoast() {
+            int start = -1;
+            for (int i = 0; i < n * n && start < 0; i++) if (land[i]) start = i;
+            if (start < 0) return new int[0];
+            int sx = start % n, sz = start / n;
+            int cx = sx, cz = sz, bx = sx - 1, bz = sz;
+            int fx = sx, fz = sz; // where the trace first went from the start
+            List<int[]> out = new ArrayList<>();
+            for (int steps = 0; steps < 4 * n * n; steps++) {
+                int[] cell = {originX + cx * LAND_STEP, originZ + cz * LAND_STEP,
+                        Integer.signum(bx - cx), Integer.signum(bz - cz)};
+                int from = 0;
+                for (int k = 0; k < 8; k++) if (MOORE[k][0] == bx - cx && MOORE[k][1] == bz - cz) from = k;
+                int px = bx, pz = bz, nx = cx, nz = cz;
+                boolean moved = false;
+                for (int k = 1; k <= 8 && !moved; k++) {
+                    int[] d = MOORE[(from + k) % 8];
+                    nx = cx + d[0];
+                    nz = cz + d[1];
+                    if (landCell(nx, nz)) moved = true;
+                    else {
+                        px = nx;
+                        pz = nz;
+                    }
+                }
+                if (!moved) { // a one-cell continent
+                    out.add(cell);
+                    break;
+                }
+                // Closed: back at the start and about to repeat the first step.
+                if (steps > 0 && cx == sx && cz == sz && nx == fx && nz == fz) break;
+                if (steps == 0) {
+                    fx = nx;
+                    fz = nz;
+                }
+                out.add(cell);
+                bx = px;
+                bz = pz;
+                cx = nx;
+                cz = nz;
+            }
+            int[] flat = new int[out.size() * 4];
+            for (int i = 0; i < out.size(); i++) System.arraycopy(out.get(i), 0, flat, i * 4, 4);
+            return flat;
+        }
     }
 
     private static volatile Plan plan;

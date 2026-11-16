@@ -5,6 +5,14 @@ reconstructed on 2026-09-27; everything from
 0.0.1 to 0.7.3 landed in one catch-up commit (`15597b7`) because it had not been committed as
 it happened. Earlier history is in `git log`.
 
+## 0.10.2 — 2026-11-01
+- **The spawn continent's coast, for Terra Towns' hamlets**: the spawn-village plan traces the
+  continent's outer coast as a closed loop on its 128-block land lattice (`Plan.coast()`), and
+  `spawn/SpawnContinent` hands that loop and the planned villages to Terra Towns in plain types
+  (it reaches them by reflection). Terra Towns 0.5.10 spreads its starting hamlets along it, away
+  from the villages, instead of tracing the biome coast itself (the user, 2026-10-31). On the
+  playtest seed: a loop of 798 cells.
+
 ## 0.10.1 — 2026-10-31
 - **Fewer Cobblemon structures**: new `[cobblemon] cobblemon_spacing_multiplier` (default 2.0, on top of
   the global 1.5) spaces Cobblemon's habitats, ruins, gimmi towers, fishing boats and shipwreck coves
