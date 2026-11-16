@@ -87,6 +87,10 @@ public class TerraContinental {
     public static final Supplier<net.minecraft.world.level.levelgen.structure.placement.StructurePlacementType<com.terracontinental.spawn.SpawnVillagePlacement>> SPAWN_VILLAGE_PLACEMENT =
             PLACEMENT_TYPES.register("spawn_village", () -> () -> com.terracontinental.spawn.SpawnVillagePlacement.CODEC);
 
+    /** A few sites on every continent: the abandoned villages, Forgotten villages and Pumpkin Patches. */
+    public static final Supplier<net.minecraft.world.level.levelgen.structure.placement.StructurePlacementType<com.terracontinental.spawn.PerContinentPlacement>> PER_CONTINENT_PLACEMENT =
+            PLACEMENT_TYPES.register("per_continent", () -> () -> com.terracontinental.spawn.PerContinentPlacement.CODEC);
+
     public TerraContinental(IEventBus modEventBus, ModContainer modContainer) {
         DENSITY_FUNCTION_TYPES.register(modEventBus);
         PLACEMENT_TYPES.register(modEventBus);
@@ -101,8 +105,10 @@ public class TerraContinental {
         modEventBus.addListener(TerraContinental::addPackFinders);
         NeoForge.EVENT_BUS.addListener(DumpBiomesCommand::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(BiomeMapCommand::onRegisterCommands);
+        NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.CaveCensusCommand::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.VillagesCommand::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.VillagesCommand::onServerTick);
+        NeoForge.EVENT_BUS.addListener(com.terracontinental.spawn.VillagePoolCheck::onServerStarted);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerAboutToStartEvent e) ->
                 com.terracontinental.worldtype.WorldTypeCheck.run(e.getServer()));
         // Start the world plan as the overworld loads, before the spawn area generates: the loading
@@ -112,6 +118,7 @@ public class TerraContinental {
                     && sl.dimension() == net.minecraft.world.level.Level.OVERWORLD) {
                 com.terracontinental.plan.WorldPlan.get(sl);
                 com.terracontinental.alpine.Alpine.load(sl);
+                com.terracontinental.structure.DryStarts.load(sl);
             }
         });
         // Plan the spawn villages off-thread as soon as the server is up. The plan isn't saved, so

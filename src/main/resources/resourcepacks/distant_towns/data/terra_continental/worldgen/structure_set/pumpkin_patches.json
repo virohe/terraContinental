@@ -6,10 +6,11 @@
         }
     ],
     "placement": {
-        "type": "minecraft:random_spread",
+        "type": "terra_continental:per_continent",
         "salt": 731045921,
-        "spacing": 129,
-        "separation": 100
+        "biomes": "#biomeswevegone:has_structure/village_pumpkin_patch",
+        "min_count": 1,
+        "max_count": 2
     },
     "structures": [
         {

@@ -46,10 +46,18 @@ public abstract class LevelLoadingScreenMixin extends Screen {
         return PlanMapRenderer.textY(y);
     }
 
+    /** The whole load's percentage instead of the spawn area's (the user, 2026-11-10). */
+    @ModifyArg(method = "render", require = 0, index = 1, at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/GuiGraphics;drawCenteredString(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;III)V"))
+    private Component terra_continental$wholeLoadPercent(Component text) {
+        return PlanMapRenderer.progressText(text);
+    }
+
     @Inject(method = "removed", at = @At("TAIL"), require = 0)
     private void terra_continental$releasePlan(CallbackInfo ci) {
         PlanMapRenderer.close();
         PlanPreviews.release();
         com.terracontinental.plan.LoadingStatus.reset();
+        com.terracontinental.client.LoadingControls.reset();
     }
 }

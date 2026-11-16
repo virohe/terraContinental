@@ -13,7 +13,8 @@ Writes (src/main/resources):
 
 World types (the creation screen's list):
   TC: Large Biomes  terra_continental:large_biomes (a fresh Create World screen starts on it: client mixin)
-                    climate zones 4x vanilla, temperate spawn continent
+                    temperature zones 4x vanilla, the pack's own vegetation (as Temperate: wider
+                    patches than 4x vanilla), temperate spawn continent
   TC: Temperate     terra_continental:temperate - minecraft:overworld itself: the pack's climate
                     (the terrain's own scales), temperate spawn continent
   TC: Climates      terra_continental:climates - climate zones 4x vanilla, no temperate override
@@ -70,7 +71,9 @@ def main():
     write('terra_continental/worldgen/density_function/climate/climates/temperature.json', {
         "type": "minecraft:add", "argument1": 0.0, "argument2": "terra_continental:climate/temperature_large"})
 
-    for name, temp, veg in (('overworld_large', 'terra_continental:climate/large/temperature', 'terra_continental:climate/large/vegetation'),
+    # Large takes the pack's own vegetation router (Temperate's): its noise is about twice as wide as
+    # vegetation_large, and vegetation width sets how big biome patches are.
+    for name, temp, veg in (('overworld_large', 'terra_continental:climate/large/temperature', 'minecraft:overworld/noise_router/vegetation'),
                             ('overworld_climates', 'terra_continental:climate/climates/temperature', 'terra_continental:climate/large/vegetation')):
         s = copy.deepcopy(base)
         s['noise_router']['temperature'] = temp

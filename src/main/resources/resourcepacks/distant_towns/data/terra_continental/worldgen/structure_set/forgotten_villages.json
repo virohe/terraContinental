@@ -6,10 +6,11 @@
         }
     ],
     "placement": {
-        "type": "minecraft:random_spread",
+        "type": "terra_continental:per_continent",
         "salt": 902114377,
-        "spacing": 500,
-        "separation": 250
+        "biomes": "#biomeswevegone:has_structure/village_forgotten",
+        "min_count": 1,
+        "max_count": 2
     },
     "structures": [
         {

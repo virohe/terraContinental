@@ -309,7 +309,9 @@ def strip_giant(node):
 
 def giant_node(p, **extra):
     n = {"type": GIANT, "height": p["giant_height"], "radius": p["giant_radius"],
-         "reach": p["giant_reach"], "jitter_noise": "terra_continental:continent_jitter"}
+         "reach": p["giant_reach"], "jitter_noise": "terra_continental:continent_jitter",
+         # Where GiantPeaksFunction finds the steered continent layout (SpawnSteer).
+         "continents": "terra_continental:continent_base"}
     if p["giant_warp"] or p["giant_spurs"] or p["giant_texture"] or p["giant_grain"]:
         n.update({"warp": p["giant_warp"], "spurs": p["giant_spurs"], "texture": p["giant_texture"],
                   "detail_noise": "terra_continental:tectonic"})

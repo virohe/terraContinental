@@ -84,7 +84,6 @@ public final class SpawnVillagePlanner {
     private static final int LAND_STEP = 128;
     private static final int CAND_STEP = 256;
     private static final int[] OFFSETS = {0, -40, 40, -20, 20, -48, 48};
-    private static final int FOOTPRINT_RADIUS = 128, FOOTPRINT_RAYS = 16, FOOTPRINT_MAX_STEP = 12;
     /** Spots rejected near the centre, further out, by the structure, and passed; and time in checks: logged with the plan. */
     private static final int[] CHECKS = new int[4];
     private static final long[] CHECK_NANOS = new long[1];
@@ -99,6 +98,10 @@ public final class SpawnVillagePlanner {
         public final Map<Long, Site> sites = new LinkedHashMap<>();
         public double centroidX, centroidZ, areaKm2, gapUsed;
         public String note = "";
+        /** Share of the land farther than the even-spread radius from any village; see {@link #assess}. */
+        public double uncovered;
+        /** Why the village spread looks poor, or empty when it looks fine. */
+        public final List<String> problems = new ArrayList<>();
 
         Plan(long seed, int originX, int originZ, int n) {
             this.seed = seed;
@@ -245,6 +248,9 @@ public final class SpawnVillagePlanner {
             } catch (Throwable e) {
                 LOGGER.error("[spawn-villages] planning failed; spawn continent keeps the random village grids", e);
                 p = null;
+            } finally {
+                com.terracontinental.plan.LoadingStatus.message(null);
+                com.terracontinental.plan.LoadingStatus.villagePlanDone();
             }
             plan = p;
             planFor = key;
@@ -281,6 +287,8 @@ public final class SpawnVillagePlanner {
         double minGap = TerraStructureConfig.SPAWN_VILLAGE_MIN_GAP.get();
         int maxRelief = TerraStructureConfig.SPAWN_VILLAGE_MAX_RELIEF.get();
         themedMax = TerraStructureConfig.SPAWN_VILLAGE_THEMED_MAX.get();
+        com.terracontinental.plan.LoadingStatus.villagePlanStart(count);
+        com.terracontinental.plan.LoadingStatus.message("Placing villages: finding the spawn continent");
 
         // 1. Land: biome at sea level is not an ocean. Read from the world plan (same lattice and test);
         // points beyond its reach are sampled here.
@@ -341,8 +349,10 @@ public final class SpawnVillagePlanner {
                 }
             }
         }
+        com.terracontinental.plan.LoadingStatus.message("Placing villages: measuring " + spots.size() + " spots");
         List<Cand> cands = Collections.synchronizedList(new ArrayList<>());
         spots.parallelStream().forEach(s -> {
+            if (!server.isRunning()) return; // the player asked for a new seed: this world is going
             int h = gen.getBaseHeight(s[0], s[1], Heightmap.Types.WORLD_SURFACE_WG, level, rs);
             if (h <= sea) return; // water surface
             Holder<Biome> b = bs.getNoiseBiome(QuartPos.fromBlock(s[0]), QuartPos.fromBlock(h), QuartPos.fromBlock(s[1]), sampler);
@@ -354,6 +364,8 @@ public final class SpawnVillagePlanner {
             if (!ok.isEmpty()) cands.add(new Cand(s[0], s[1], h, ok));
         });
         List<Cand> pool = new ArrayList<>(cands);
+        for (Cand c : pool) com.terracontinental.plan.LoadingStatus.villageCandidate(c.x, c.z);
+        com.terracontinental.plan.LoadingStatus.message("Placing villages: 0 of " + count + " placed");
         pool.sort((a, b) -> a.x != b.x ? Integer.compare(a.x, b.x) : Integer.compare(a.z, b.z)); // deterministic order
         Random rng = new Random(seed ^ 0x5EED_7111_A6E5L);
         Collections.shuffle(pool, rng);
@@ -365,6 +377,7 @@ public final class SpawnVillagePlanner {
         List<Cand> byCentre = new ArrayList<>(pool);
         byCentre.sort((a, b) -> Double.compare(dist2(a, p.centroidX, p.centroidZ), dist2(b, p.centroidX, p.centroidZ)));
         for (Cand c : byCentre) {
+            if (!server.isRunning()) return stopped(p);
             Site s = check(level, gen, bs, rs, seed, sea, c, pickType(c.types, used, rng), holders, maxRelief, true);
             if (s != null) {
                 accept(p, s, used, chosen);
@@ -378,6 +391,7 @@ public final class SpawnVillagePlanner {
         p.gapUsed = minGap;
         java.util.Set<Cand> rejected = new java.util.HashSet<>();
         while (p.sites.size() < count && !chosen.isEmpty()) {
+            if (!server.isRunning()) return stopped(p);
             List<Cand> open = new ArrayList<>();
             double best = 0;
             Map<Cand, Double> d = new HashMap<>();
@@ -426,7 +440,69 @@ public final class SpawnVillagePlanner {
             }
         }
         if (p.sites.size() < count) p.note = " (land ran out at " + p.sites.size() + ")";
+        assess(p, count, minGap);
         return p;
+    }
+
+    /**
+     * The world is being thrown away (the loading screen's "Try a New Seed" stops the server): stop
+     * planning at once instead of spending another half minute on checks nobody will use.
+     */
+    private static Plan stopped(Plan p) {
+        p.note = " (stopped: the server is shutting down)";
+        return p;
+    }
+
+    /**
+     * At most this share of the land may lie beyond {@link #COVER_RADIUS} of every village. The 180 km2
+     * test continent (seed 4151832666630476678), well spread, has 16%; the user's 2026-11-10 world 42%.
+     */
+    static final double UNCOVERED_WARN = 0.25;
+    /**
+     * The even-spread radius, as a share of sqrt(land per village). Villages on a hexagonal grid
+     * leave no land farther than 0.62 of that, so 0.75 counts only real gaps.
+     */
+    static final double COVER_RADIUS = 0.75;
+
+    /**
+     * Does this spawn continent give its villages a poor spread? Then the loading screen says so, so
+     * the player can try a new seed before the hamlets are built (the user, 2026-11-10, on a 58 km2
+     * continent where 8 of 10 villages fit, at half the gap, all down one side). Two tests: not all
+     * villages fit, or a large share of the land is far from every village (steep or broken ground
+     * the planner had to leave empty). A shrunken gap alone is no fault: on a small continent the
+     * villages just sit closer (the user, 2026-11-10: 10 villages at gap 2187 on 63 km2 was "pretty good").
+     */
+    static void assess(Plan p, int count, double minGap) {
+        if (p.sites.isEmpty()) {
+            p.problems.add("no village fit");
+        } else {
+            double radius = COVER_RADIUS * Math.sqrt(p.areaKm2 * 1e6 / count);
+            long land = 0, far = 0;
+            for (int i = 0; i < p.n * p.n; i++) {
+                if (!p.land[i]) continue;
+                land++;
+                double x = p.originX + (i % p.n) * LAND_STEP, z = p.originZ + (i / p.n) * LAND_STEP;
+                boolean near = false;
+                for (Site s : p.sites.values()) {
+                    if (Math.hypot(s.chunk().getMiddleBlockX() - x, s.chunk().getMiddleBlockZ() - z) <= radius) {
+                        near = true;
+                        break;
+                    }
+                }
+                if (!near) far++;
+            }
+            p.uncovered = land == 0 ? 0 : far / (double) land;
+            if (p.sites.size() < count) p.problems.add(p.sites.size() + " of " + count + " villages fit");
+            if (p.uncovered > UNCOVERED_WARN) {
+                p.problems.add(Math.round(p.uncovered * 100) + "% of the land over " + Math.round(radius) + " blocks from a village");
+            }
+        }
+        LOGGER.info("[spawn-villages] spread: {}% of the land over the even-spread radius from a village, gap {}; {}",
+                Math.round(p.uncovered * 100), Math.round(p.gapUsed),
+                p.problems.isEmpty() ? "looks fine" : "non-optimal: " + String.join(", ", p.problems));
+        if (!p.problems.isEmpty()) {
+            com.terracontinental.plan.LoadingStatus.warn("Village placement appears to be non-optimal");
+        }
     }
 
     private static void accept(Plan p, Site s, Map<String, Integer> used, List<double[]> chosen) {
@@ -434,6 +510,8 @@ public final class SpawnVillagePlanner {
         used.merge(s.type(), 1, Integer::sum);
         chosen.add(new double[]{s.chunk().getMiddleBlockX(), s.chunk().getMiddleBlockZ()});
         com.terracontinental.plan.LoadingStatus.village(s.chunk().getMiddleBlockX(), s.chunk().getMiddleBlockZ());
+        com.terracontinental.plan.LoadingStatus.message("Placing villages: " + p.sites.size() + " of "
+                + Math.max(p.sites.size(), com.terracontinental.plan.LoadingStatus.villageTarget()) + " placed");
     }
 
     private static int themedMax;
@@ -466,10 +544,14 @@ public final class SpawnVillagePlanner {
     private static Site check(ServerLevel level, ChunkGenerator gen, BiomeSource bs, RandomState rs, long seed, int sea,
                               Cand c, String type, Map<String, Holder<Structure>> holders, int maxRelief, boolean central) {
         long t = System.nanoTime();
+        com.terracontinental.plan.LoadingStatus.villageProbe(c.x, c.z);
+        Site s = null;
         try {
-            return checkSite(level, gen, bs, rs, seed, sea, c, type, holders, maxRelief, central);
+            s = checkSite(level, gen, bs, rs, seed, sea, c, type, holders, maxRelief, central);
+            return s;
         } finally {
             CHECK_NANOS[0] += System.nanoTime() - t;
+            if (s == null) com.terracontinental.plan.LoadingStatus.villageRejected(c.x, c.z);
         }
     }
 
@@ -477,38 +559,20 @@ public final class SpawnVillagePlanner {
     private static Site checkSite(ServerLevel level, ChunkGenerator gen, BiomeSource bs, RandomState rs, long seed, int sea,
                                   Cand c, String type, Map<String, Holder<Structure>> holders, int maxRelief, boolean central) {
         com.terracontinental.plan.WorldPlan wp = com.terracontinental.plan.WorldPlan.get(level);
-        // Steepness over the footprint, measured around the chunk's middle (where the village starts),
-        // 7x7 samples out to 48 blocks; any sample on water fails. Audit 2026-10-19: 3x3 samples at the
-        // lattice point, 8 blocks off, passed a spot with a 30-block cliff inside the village.
+        // Level ground over the village's whole spread (VillageFootprint): near the centre, then out to
+        // 128 blocks. Audit 2026-10-19: 3x3 samples 8 blocks off passed a 30-block cliff inside the
+        // village; playtest 2026-10-31: crags 100-128 blocks out.
         ChunkPos chunk = new ChunkPos(c.x >> 4, c.z >> 4);
         int mx = chunk.getMiddleBlockX(), mz = chunk.getMiddleBlockZ();
+        java.util.function.IntBinaryOperator ground = (x, z) -> height(wp, gen, level, rs, x, z);
+        int fit = VillageFootprint.check(ground, sea, mx, mz, maxRelief);
+        if (fit != VillageFootprint.OK) { CHECKS[fit - 1]++; return null; }
         int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE;
         for (int dx : OFFSETS) {
             for (int dz : OFFSETS) {
-                int h = height(wp, gen, level, rs, mx + dx, mz + dz);
-                if (h <= sea) { CHECKS[0]++; return null; }
+                int h = ground.applyAsInt(mx + dx, mz + dz);
                 lo = Math.min(lo, h);
                 hi = Math.max(hi, h);
-                if (hi - lo > maxRelief) { CHECKS[0]++; return null; }
-            }
-        }
-        // The village's whole spread, out to 128 blocks: rings of FOOTPRINT_RAYS points every 32
-        // blocks, at most twice max_relief across them all and no rise of more than
-        // FOOTPRINT_MAX_STEP per 16 blocks between rings along a ray. Playtest 2026-10-31: the
-        // central village (relief 14 within 48 blocks) was built across stone crags 100-128 blocks
-        // out (relief 62, 33 blocks up in 16).
-        int h0 = height(wp, gen, level, rs, mx, mz);
-        int[] prev = new int[FOOTPRINT_RAYS];
-        java.util.Arrays.fill(prev, h0);
-        int flo = Math.min(lo, h0), fhi = Math.max(hi, h0);
-        for (int r = 32; r <= FOOTPRINT_RADIUS; r += 32) {
-            for (int i = 0; i < FOOTPRINT_RAYS; i++) {
-                double a = 2 * Math.PI * i / FOOTPRINT_RAYS;
-                int h = height(wp, gen, level, rs, mx + (int) Math.round(r * Math.cos(a)), mz + (int) Math.round(r * Math.sin(a)));
-                flo = Math.min(flo, h);
-                fhi = Math.max(fhi, h);
-                if (Math.abs(h - prev[i]) > 2 * FOOTPRINT_MAX_STEP || fhi - flo > 2 * maxRelief) { CHECKS[1]++; return null; }
-                prev[i] = h;
             }
         }
         Holder<Structure> holder = holders.get(type);
@@ -564,6 +628,6 @@ public final class SpawnVillagePlanner {
             if (TerraConfig.SPEC.isLoaded()) return TerraConfig.CENTRAL_LAND_RADIUS.get();
         } catch (Throwable ignored) {
         }
-        return 9000;
+        return 14500;
     }
 }

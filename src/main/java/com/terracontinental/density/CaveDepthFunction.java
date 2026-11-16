@@ -7,17 +7,21 @@ import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.world.level.levelgen.DensityFunction;
 
 /**
- * A position-independent constant: the factor that rescales Tectonic's terrain-following
+ * A position-independent constant: the factor that rescales the terrain-following
  * depth into vanilla's biome-depth semantics. Registered as
  * {@code terra_continental:cave_depth_scale}.
  *
  * <p>Vanilla selects underground biomes by NEAREST box on a depth axis where
  * {@code 0.2..0.9} is the underground-biome window (dripstone_caves, lush_caves), surface
  * biomes sit at both {@code point(0.0)} and {@code point(1.0)}, and deep_dark at
- * {@code point(1.1)}. The terrain's depth hard-caps at 1.3 below y=32, which pins the
- * value flat for hundreds of blocks in a deepened world — nearer deep_dark's 1.1 than the
- * surface biomes' 1.0, so deep_dark wins whole columns and the 0.2..0.9 window is
- * unreachable. Rescaling linearly (vanilla's depth is linear in Y too) restores the bands.
+ * {@code point(1.1)}. Read raw, the terrain's depth runs far past that range in this deep world,
+ * so whole columns sit nearer deep_dark's 1.1 than the surface biomes' 1.0 and the 0.2..0.9
+ * window is unreachable. Rescaling linearly (vanilla's depth is linear in Y too) restores the
+ * bands; {@code noise_router/depth.json} then caps the result at 0.8 above y=32 and 1.6 below.
+ *
+ * <p>Until 2026-11-10 that file multiplied by a literal 0.42 and nothing referenced this
+ * function, so the {@code [caves]} settings did nothing; the floor default (1.88671875) is the
+ * value that gives exactly 0.42, so wiring it in changed no world.
  *
  * <p>The factor is derived from the world's vertical extent ({@link TerrainBase#MIN_Y}, the
  * floor in the terrain pack; it was read from {@code config/tectonic.json} before Terra
@@ -54,8 +58,16 @@ public class CaveDepthFunction implements DensityFunction.SimpleFunction {
         if (!Double.isNaN(s)) {
             return s;
         }
-        double span = TerraConfig.CAVE_DEPTH_REFERENCE_Y.get() - TerrainBase.MIN_Y;
-        s = (span <= 1.0) ? 1.0 : TerraConfig.CAVE_DEPTH_FLOOR_VALUE.get() * BLOCKS_PER_DEPTH_UNIT / span;
+        double floorValue = 1.88671875;
+        int referenceY = 63;
+        try {
+            floorValue = TerraConfig.CAVE_DEPTH_FLOOR_VALUE.get();
+            referenceY = TerraConfig.CAVE_DEPTH_REFERENCE_Y.get();
+        } catch (IllegalStateException notLoadedYet) {
+            // Defaults above (scale 0.42); configs load long before worldgen in practice.
+        }
+        double span = referenceY - TerrainBase.MIN_Y;
+        s = (span <= 1.0) ? 1.0 : floorValue * BLOCKS_PER_DEPTH_UNIT / span;
         cachedScale = s;
         return s;
     }

@@ -7,6 +7,9 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import net.minecraft.commands.arguments.ResourceLocationArgument;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.Util;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -81,7 +84,30 @@ public class BiomeMapCommand {
             Commands.literal("continental")
                 .requires(src -> src.hasPermission(2))
                 .then(mapNode("biome_map", false))
-                .then(mapNode("detail_map", true)));
+                .then(mapNode("detail_map", true))
+                .then(settingsNode()));
+    }
+
+    /**
+     * biome_map_settings &lt;noise_settings&gt; &lt;radius&gt; &lt;step&gt; &lt;seed&gt; &lt;centerX&gt; &lt;centerZ&gt;:
+     * biome_map with the climate read from another noise-settings entry (a world datapack's
+     * variant, say) instead of the world's own, so climate variants compare in one server boot.
+     * The biome source stays the world's, so TerraBlender and BWG route as in game.
+     */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> settingsNode() {
+        return Commands.literal("biome_map_settings")
+            .then(Commands.argument("settings", ResourceLocationArgument.id())
+                .then(Commands.argument("radius", IntegerArgumentType.integer(64, 4_000_000))
+                    .then(Commands.argument("step", IntegerArgumentType.integer(4, 100_000))
+                        .then(Commands.argument("seed", LongArgumentType.longArg())
+                            .then(Commands.argument("centerX", IntegerArgumentType.integer())
+                                .then(Commands.argument("centerZ", IntegerArgumentType.integer())
+                                    .executes(ctx -> run(ctx,
+                                        LongArgumentType.getLong(ctx, "seed"),
+                                        IntegerArgumentType.getInteger(ctx, "centerX"),
+                                        IntegerArgumentType.getInteger(ctx, "centerZ"),
+                                        false,
+                                        ResourceLocationArgument.getId(ctx, "settings")))))))));
     }
 
     /**
@@ -110,6 +136,11 @@ public class BiomeMapCommand {
 
     private static int run(CommandContext<CommandSourceStack> ctx, Long seedArg,
                            int centerX, int centerZ, boolean withHeight) {
+        return run(ctx, seedArg, centerX, centerZ, withHeight, null);
+    }
+
+    private static int run(CommandContext<CommandSourceStack> ctx, Long seedArg,
+                           int centerX, int centerZ, boolean withHeight, ResourceLocation settingsId) {
         CommandSourceStack source = ctx.getSource();
         int radius = IntegerArgumentType.getInteger(ctx, "radius");
         int step = IntegerArgumentType.getInteger(ctx, "step");
@@ -159,6 +190,16 @@ public class BiomeMapCommand {
         // keeps threads off each other's density-function caches (the wrapper functions in a
         // Climate.Sampler hold mutable per-instance caches and must not be shared).
         NoiseGeneratorSettings settings = noiseGen.generatorSettings().value();
+        if (settingsId != null) {
+            var holder = overworld.registryAccess().registryOrThrow(Registries.NOISE_SETTINGS)
+                .getHolder(ResourceKey.create(Registries.NOISE_SETTINGS, settingsId));
+            if (holder.isEmpty()) {
+                source.sendFailure(Component.literal("[continental] No noise settings " + settingsId));
+                return 0;
+            }
+            settings = holder.get().value();
+        }
+        final NoiseGeneratorSettings sampled = settings;
         HolderGetter<NormalNoise.NoiseParameters> noiseGetter =
             overworld.registryAccess().lookupOrThrow(Registries.NOISE);
         long seedUsed = seedArg != null ? seedArg.longValue() : overworld.getSeed();
@@ -172,7 +213,7 @@ public class BiomeMapCommand {
             false);
 
         ThreadLocal<RandomState> perThreadState =
-            ThreadLocal.withInitial(() -> RandomState.create(settings, noiseGetter, seedUsed));
+            ThreadLocal.withInitial(() -> RandomState.create(sampled, noiseGetter, seedUsed));
 
         int[] pixels = new int[n * n];
         // Parallel biome-ID grid + palette. Exported alongside the PNG so offline tools can
@@ -234,7 +275,8 @@ public class BiomeMapCommand {
             Path dir = server.getServerDirectory().resolve("seedscan");
             // Radius/step are part of the name: scanning the same seed at a different zoom
             // used to silently overwrite the earlier export.
-            String stem = "biome_map_" + seedUsed + "_r" + radius + "_s" + step;
+            String stem = "biome_map_" + seedUsed + "_r" + radius + "_s" + step
+                + (settingsId == null ? "" : "_" + settingsId.toString().replace(':', '_').replace('/', '_'));
             Path out = dir.resolve(stem + ".png");
             try {
                 Files.createDirectories(dir);

@@ -1,5 +1,5 @@
 {
-  "_comment": "INTENTIONAL minecraft namespace override. Affects ALL dimension presets (default, large_biomes, amplified). Installing alongside Tectonic, Terralith, or any other worldgen mod that overrides this file will conflict silently by datapack load order. Creating a vanilla Default world with this mod installed will produce Terra Continental terrain.",
+  "_comment": "INTENTIONAL minecraft namespace override. Affects ALL dimension presets (default, large_biomes, amplified). Installing alongside Terralith or any other worldgen mod that overrides this file will conflict silently by datapack load order. Creating a vanilla Default world with this mod installed will produce Terra Continental terrain.",
   "type": "minecraft:flat_cache",
   "argument": {
     "type": "minecraft:max",

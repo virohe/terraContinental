@@ -14,6 +14,9 @@ import java.util.function.Supplier;
  * Wraps any DensityFunction. Radial continent shaping with multiple deterministic
  * continent centers:
  *
+ *   With spawn_steering (the default), steps 1 and 2 come from SpawnSteer's layout for the
+ *   world: the spawn continent's lobes, and the continents with the two nearest moved.
+ *
  *   1. central_land_bump (smoothstep falloff): added to the upstream noise
  *      within central_land_radius. Guarantees a continent-scale landmass at
  *      the origin so the player spawns on land regardless of seed.
@@ -52,7 +55,7 @@ public final class RadialFalloffFunction implements DensityFunction {
     private static final double DEFAULT_OCEAN_BIAS = 0.35;
     private static final double DEFAULT_RADIAL_BIAS_STRENGTH = 0.15;
     private static final double DEFAULT_CENTRAL_LAND_BUMP = 1.2;
-    private static final double DEFAULT_CENTRAL_LAND_RADIUS = 10000.0;
+    private static final double DEFAULT_CENTRAL_LAND_RADIUS = 14500.0;
     private static final int DEFAULT_ADDITIONAL_CONTINENTS = 5;
     private static final double DEFAULT_CONTINENT_SPREAD = 40000.0;
     private static final double DEFAULT_CONTINENT_RADIUS = 9000.0;
@@ -72,6 +75,11 @@ public final class RadialFalloffFunction implements DensityFunction {
     private final double continentSpread;
     private final double continentRadius;
     private final double continentBump;
+
+    // The steered spawn layout (SpawnSteer), from the config (not the JSON: the codec is near
+    // RecordCodecBuilder's 16-field limit). Found on the first compute; the search is shared.
+    private volatile SpawnSteer.Layout layout;
+    private volatile Boolean steering;
 
     // [i] = {x, z, radius}. Built lazily on first compute so the jitter noise is
     // already seeded; the benign race re-computes identical values.
@@ -178,23 +186,37 @@ public final class RadialFalloffFunction implements DensityFunction {
 
     @Override
     public double compute(FunctionContext context) {
-        double upstreamValue = wrapped.compute(context);
         double x = context.blockX();
         double z = context.blockZ();
         double distance = Math.sqrt(x * x + z * z);
+        SpawnSteer.Layout layout = layout();
+        // A steered layout found in a retry round reads the noise shifted (SpawnSteer.search).
+        double upstreamValue = layout == null || (layout.ox() == 0 && layout.oz() == 0)
+                ? wrapped.compute(context)
+                : wrapped.compute(new SinglePointContext(context.blockX() + layout.ox(), context.blockY(),
+                        context.blockZ() + layout.oz()));
 
-        // 1. Central-continent bump (smoothstep falloff within central_land_radius)
-        double bumped = upstreamValue + centralLandBump * smoothstepFalloff(distance / centralLandRadius);
-
-        // 2. Additional seed-placed continents
-        if (additionalContinents > 0) {
-            for (double[] center : centers()) {
-                double dx = x - center[0];
-                double dz = z - center[1];
-                double radius = center[2];
+        // 1 + 2. The spawn continent and the others: the steered layout (SpawnSteer), or with
+        // steering off a round dome at the origin and the seed-placed continents.
+        double bumped;
+        if (layout != null) {
+            bumped = upstreamValue + layout.spawnBump(x, z, distance);
+            for (double[] c : layout.centers()) {
+                double dx = x - c[0], dz = z - c[1];
                 double distSq = dx * dx + dz * dz;
-                if (distSq < radius * radius) {
-                    bumped += continentBump * smoothstepFalloff(Math.sqrt(distSq) / radius);
+                if (distSq < c[2] * c[2]) bumped += continentBump * smoothstepFalloff(Math.sqrt(distSq) / c[2]);
+            }
+        } else {
+            bumped = upstreamValue + centralLandBump * smoothstepFalloff(distance / centralLandRadius);
+            if (additionalContinents > 0) {
+                for (double[] center : centers()) {
+                    double dx = x - center[0];
+                    double dz = z - center[1];
+                    double radius = center[2];
+                    double distSq = dx * dx + dz * dz;
+                    if (distSq < radius * radius) {
+                        bumped += continentBump * smoothstepFalloff(Math.sqrt(distSq) / radius);
+                    }
                 }
             }
         }
@@ -209,19 +231,51 @@ public final class RadialFalloffFunction implements DensityFunction {
         return blend * biased + (1.0 - blend) * oceanFloorValue;
     }
 
+    /** This world's steered layout, or null with spawn_steering off. Searched once (SpawnSteer.get). */
+    private SpawnSteer.Layout layout() {
+        if (steering == Boolean.FALSE) return null;
+        SpawnSteer.Layout l = layout;
+        if (l == null) {
+            if (!configOrDefault(TerraConfig.SPAWN_STEERING::get, true)) {
+                steering = Boolean.FALSE;
+                return null;
+            }
+            SpawnSteer.Params p = new SpawnSteer.Params(oceanBias, radialBiasStrength, coreRadius, borderRadius,
+                    transitionWidth, oceanFloorValue, centralLandBump, centralLandRadius, continentBump,
+                    configOrDefault(TerraConfig.SPAWN_TARGET_AREA::get, 290.0),
+                    configOrDefault(TerraConfig.SPAWN_GAP_MIN::get, 3.0),
+                    configOrDefault(TerraConfig.SPAWN_GAP_MAX::get, 6.0),
+                    configOrDefault(TerraConfig.SPAWN_CANDIDATES::get, 48),
+                    configOrDefault(TerraConfig.SPAWN_MAX_OTHER_LAND::get, 15.0),
+                    configOrDefault(TerraConfig.SPAWN_ROUNDS::get, 8));
+            double[][] base = additionalContinents > 0 ? centers() : new double[0][];
+            l = SpawnSteer.get(wrapped, (px, pz) -> jitterNoise.getValue(px, 0.0, pz), p, base);
+            layout = l;
+        }
+        return l;
+    }
+
+    /** Is the spawn continent steered (spawn_steering)? */
+    public boolean steered() {
+        return layout() != null;
+    }
+
     private static double smoothstepFalloff(double t) {
         if (t >= 1.0) return 0.0;
         return 1.0 - t * t * (3.0 - 2.0 * t);
     }
 
     /**
-     * Every continent as {x, z, radius}: the spawn continent at the origin first, then the
-     * seed-placed ones. For finding which continent a position is on (/continental villages).
+     * Every continent as {x, z, radius}: the spawn continent at the origin first (steered: its core
+     * lobe's radius), then the others (steered: as SpawnSteer placed them). For finding which
+     * continent a position is on (/continental villages) and for the giant massifs.
      */
     public double[][] continents() {
-        double[][] extra = additionalContinents > 0 ? centers() : new double[0][];
+        SpawnSteer.Layout l = layout();
+        double[][] extra = l != null ? l.centers() : additionalContinents > 0 ? centers() : new double[0][];
         double[][] all = new double[extra.length + 1][];
-        all[0] = new double[]{0.0, 0.0, centralLandRadius};
+        // Steered: the spawn continent's core lobe, where its giant massif goes.
+        all[0] = new double[]{0.0, 0.0, l != null ? l.core() : centralLandRadius};
         System.arraycopy(extra, 0, all, 1, extra.length);
         return all;
     }

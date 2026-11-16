@@ -17,6 +17,7 @@
        "argument1": -1.0,
        "argument2": {
         "type": "terra_continental:giant_peaks",
+        "continents": "terra_continental:continent_base",
         "height": 2.0,
         "radius": 2400.0,
         "reach": 0.35,
@@ -104,6 +105,7 @@
            "argument1": -1.0,
            "argument2": {
             "type": "terra_continental:giant_peaks",
+            "continents": "terra_continental:continent_base",
             "height": 2.0,
             "radius": 2400.0,
             "reach": 0.35,
@@ -151,6 +153,7 @@
    },
    "argument2": {
     "type": "terra_continental:giant_peaks",
+    "continents": "terra_continental:continent_base",
     "height": 2.0,
     "radius": 2400.0,
     "reach": 0.35,

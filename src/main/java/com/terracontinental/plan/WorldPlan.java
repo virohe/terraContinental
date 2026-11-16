@@ -93,7 +93,8 @@ public final class WorldPlan implements PlanPreview {
                 return null;
             }
             p = new WorldPlan(level.getSeed(), gen.getSeaLevel());
-            LoadingStatus.reset(); // a new world: nothing chosen yet
+            // No LoadingStatus.reset() here: each client world load resets it at its start
+            // (SeedRetry.begin), and a reset here could wipe what the village planner had just posted.
             current = p;
             currentFor = key;
             WorldPlan plan = p;
@@ -160,6 +161,16 @@ public final class WorldPlan implements PlanPreview {
     }
 
     /** A registered density function, seeded the way RandomState wires the noise router. */
+    /**
+     * The seeded ground-depth function {@link #estimateHeight} reads (height = 128 x its value at y 0),
+     * built on the spot rather than waiting for the plan to start. Only meaningful where {@link #get}
+     * returns a plan.
+     */
+    public static DensityFunction groundFunction(ServerLevel level) {
+        return seeded(level.registryAccess().registryOrThrow(Registries.DENSITY_FUNCTION)
+                .getHolderOrThrow(GROUND_DEPTH).value(), level.getChunkSource().randomState());
+    }
+
     public static DensityFunction seeded(DensityFunction f, RandomState rs) {
         Map<DensityFunction, DensityFunction> wrapped = new HashMap<>();
         return f.mapAll(new DensityFunction.Visitor() {
@@ -177,8 +188,17 @@ public final class WorldPlan implements PlanPreview {
     }
 
     public static boolean isOcean(Holder<Biome> b) {
-        return b.unwrapKey().map(k -> k.location().getPath().contains("ocean")).orElse(false);
+        return b.unwrapKey().map(k -> k.location().getPath().contains("ocean")
+                || SEA_FORMATIONS.contains(k.location().toString())).orElse(false);
     }
+
+    /**
+     * BWG's ocean formations, sea biomes without "ocean" in their names: counted as land, their
+     * narrow humidity bands drew as light-green squiggles out at sea on the loading map and passed
+     * the village planner's land test (the user, 2026-11-10: keep them in the game, off the map).
+     */
+    private static final java.util.Set<String> SEA_FORMATIONS =
+            java.util.Set.of("biomeswevegone:lush_stacks", "biomeswevegone:dead_sea");
 
     // -- queries ----------------------------------------------------------------------------------
 
@@ -251,6 +271,19 @@ public final class WorldPlan implements PlanPreview {
     @Override
     public float progress() {
         return done.isDone() ? 1.0f : Math.max(0, ringsDone + 1) / (float) (half + 1);
+    }
+
+    private volatile MapStats stats;
+
+    @Override
+    public MapStats stats() {
+        if (!done.isDone() || done.isCompletedExceptionally()) return null;
+        MapStats s = stats;
+        if (s == null) {
+            s = MapStats.of(kind, height, n, STEP);
+            stats = s;
+        }
+        return s;
     }
 
     @Override

@@ -20,6 +20,13 @@ public final class LoadingStatus {
     private static final List<int[]> built = new CopyOnWriteArrayList<>();
     private static final List<int[]> villages = new CopyOnWriteArrayList<>();
     private static final List<int[]> buildOrder = new CopyOnWriteArrayList<>();
+    private static final List<String> warnings = new CopyOnWriteArrayList<>();
+    private static final List<int[]> villageCandidates = new CopyOnWriteArrayList<>();
+    private static final List<int[]> villageRejected = new CopyOnWriteArrayList<>();
+    private static volatile int[] villageProbe;
+    private static volatile int villageTarget;
+    private static volatile boolean villagesDone;
+    private static volatile boolean retry;
 
     private LoadingStatus() {}
 
@@ -76,6 +83,77 @@ public final class LoadingStatus {
         villages.add(new int[] {x, z});
     }
 
+    /**
+     * A warning for the line under the status: the planners judged this world's spawn continent
+     * poorly laid out, so the player may want a new seed (the user, 2026-11-10). Shown once each.
+     */
+    public static void warn(String text) {
+        if (text != null && !warnings.contains(text)) warnings.add(text);
+    }
+
+    public static List<String> warnings() {
+        return warnings;
+    }
+
+    /** The player asked to throw this world away and try a new seed. */
+    public static void requestRetry() {
+        retry = true;
+    }
+
+    public static boolean retryRequested() {
+        return retry;
+    }
+
+    // -- the village planner, shown live (the user, 2026-11-10: "I want to watch and see how the
+    // program runs"). Written from a chunk worker, read by the render thread.
+
+    /** The planner is starting: how many villages it aims for. */
+    public static void villagePlanStart(int target) {
+        villageTarget = target;
+        villagesDone = false;
+    }
+
+    /** A spot on the continent that a village type accepts: a faint dot until the plan is done. */
+    public static void villageCandidate(int x, int z) {
+        villageCandidates.add(new int[] {x, z});
+    }
+
+    /** The spot the planner is checking now (steepness, water, structure fit). */
+    public static void villageProbe(int x, int z) {
+        villageProbe = new int[] {x, z};
+    }
+
+    /** A checked spot that failed. */
+    public static void villageRejected(int x, int z) {
+        villageRejected.add(new int[] {x, z});
+    }
+
+    /** The plan is finished (or gave up): the candidates and probe go, the villages stay. */
+    public static void villagePlanDone() {
+        villageProbe = null;
+        villagesDone = true;
+    }
+
+    public static List<int[]> villageCandidates() {
+        return villageCandidates;
+    }
+
+    public static List<int[]> villageRejectedSpots() {
+        return villageRejected;
+    }
+
+    public static int[] villageProbe() {
+        return villageProbe;
+    }
+
+    public static int villageTarget() {
+        return villageTarget;
+    }
+
+    public static boolean villagesDone() {
+        return villagesDone;
+    }
+
     /** Nothing is being checked (the search moved on to building). */
     public static void clearProbe() {
         probe = null;
@@ -88,6 +166,13 @@ public final class LoadingStatus {
         built.clear();
         villages.clear();
         buildOrder.clear();
+        warnings.clear();
+        retry = false;
+        villageCandidates.clear();
+        villageRejected.clear();
+        villageProbe = null;
+        villageTarget = 0;
+        villagesDone = false;
     }
 
     public static String message() {

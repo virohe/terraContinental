@@ -21,6 +21,7 @@ import numpy as np
 
 import mc_biomes
 import mc_climate
+import steer_core
 import mc_dfi
 import mc_noise
 
@@ -69,8 +70,12 @@ def load_radial_params(toml_path):
             key, _, val = line.partition("=")
             key = key.strip()
             if hasattr(p, key):
+                v = val.strip()
+                if v in ("true", "false"):      # spawn_steering
+                    setattr(p, key, 1.0 if v == "true" else 0.0)
+                    continue
                 try:
-                    setattr(p, key, float(val.strip()))
+                    setattr(p, key, float(v))
                 except ValueError:
                     pass
     return p
@@ -93,6 +98,12 @@ class ClimateSim:
 
         common = _os.path.join(instance, "config", "terra_continental-common.toml")
         self.radial = load_radial_params(common)
+        # terra_continental:cave_depth_scale (CaveDepthFunction): floor_value * 128 / (reference_y - MIN_Y).
+        floor_value, reference_y = (v if v is not None else d for v, d in zip(
+            [_read_toml_number(common, k) for k in ("cave_depth_floor_value", "cave_depth_reference_y")],
+            (1.88671875, 63)))
+        span = reference_y - (-512)   # TerrainBase.MIN_Y
+        self.cave_depth_scale = 1.0 if span <= 1.0 else floor_value * 128.0 / span
         self._spawn_climate = [_read_toml_number(common, k) for k in (
             "temperate_spawn_strength", "temperate_spawn_inner_factor", "temperate_spawn_outer_factor")]
 
@@ -102,6 +113,7 @@ class ClimateSim:
             "terra_continental:clamp_between": self._clamp_between,
             "terra_continental:radial_falloff": self._radial_falloff,
             "terra_continental:spawn_climate_mask": self._spawn_climate_mask,
+            "terra_continental:cave_depth_scale": lambda ctx, node: ctx.const(self.cave_depth_scale),
             # The argument at a fixed y (the biome router's height estimate, 2026-10-31).
             "terra_continental:at_y": lambda ctx, node: mc_dfi.evaluate(node["argument"], mc_dfi.Context(
                 ctx.reg, ctx.seed, ctx.X, ctx.Z, ctx.custom, float(node.get("y", 0)))),
@@ -163,18 +175,41 @@ class ClimateSim:
         return ctx._named[key]
 
     def _radial_falloff(self, ctx, node):
-        upstream = mc_dfi.evaluate(node["wrapped"], ctx)
+        layout = self.steer_layout(ctx, node) if self.radial.spawn_steering > 0 else None
+        if layout and any(layout["offset"]):
+            # The steering's retry rounds read the noise shifted (RadialFalloffFunction.compute).
+            ox, oz = layout["offset"]
+            upstream = mc_dfi.evaluate(node["wrapped"], mc_dfi.Context(
+                ctx.reg, ctx.seed, ctx.X + ox, ctx.Z + oz, custom=ctx.custom))
+        else:
+            upstream = mc_dfi.evaluate(node["wrapped"], ctx)
         jitter = self._jitter_table(
             ctx, node.get("jitter_noise", "terra_continental:continent_jitter"))
         distance = np.sqrt(ctx.X ** 2 + ctx.Z ** 2)
+        noise = ctx.noise(node.get("jitter_noise", "terra_continental:continent_jitter"))
+        warp = (lambda x, z: steer_core.warp_at(noise, x, z, layout["wavelength"])) if layout else None
         return mc_climate.radial_falloff(
-            upstream, ctx.X, ctx.Z, distance, self.radial, jitter)
+            upstream, ctx.X, ctx.Z, distance, self.radial, jitter, layout, warp)
+
+    def steer_layout(self, ctx, node=None):
+        """The steered spawn layout for ctx's seed (SpawnSteer.java), searched on the loading map's
+        grid from the seed's own upstream noise and cached (steer_core.layout_for)."""
+        node = node or self.reg.df("terra_continental:continent_base")["argument"]["argument1"]
+        name = node.get("jitter_noise", "terra_continental:continent_jitter")
+        noise = ctx.noise(name)
+        jitter = self._jitter_table(ctx, name)
+
+        def upstream(X, Z):
+            return mc_dfi.evaluate(node["wrapped"], mc_dfi.Context(ctx.reg, ctx.seed, X, Z, custom=ctx.custom))
+
+        return steer_core.layout_for(ctx.seed, upstream, noise, mc_climate.continent_centers(jitter, self.radial),
+                                     self.radial)
 
     def _spawn_climate_mask(self, ctx, node=None):
         """terra_continental:spawn_climate_mask (SpawnClimateMask.java): the configured strength
         inside central_land_radius * inner, easing (smoothstep) to 0 by radius * outer."""
         strength, inner_f, outer_f = (v if v is not None else d for v, d in
-                                      zip(self._spawn_climate, (1.0, 1.5, 2.0)))
+                                      zip(self._spawn_climate, (1.0, 1.1, 1.5)))
         if strength <= 0.0:
             return ctx.const(0.0)
         inner = self.radial.central_land_radius * inner_f

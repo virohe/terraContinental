@@ -1,5 +1,5 @@
 {
- "_comment": "THE SNOW LINE: y 500, wandering +-40 over ~1.5 km (user's pick from 400-650, 2026-10-31). Read by the biome router (peak biomes only above it), by snowfall (BiomeSnowLineMixin), by the alpine surface pass (snow pack, bare rock, glaciers) and by the tree and structure lines ([alpine] in terra_continental-common.toml), so all agree. The surface pass moves it 25 down on north faces and 25 up on south faces.",
+ "_comment": "THE SNOW LINE: y 500, wandering +-40 over ~1.5 km. Read by the biome router (peak biomes only above it), by snowfall (BiomeSnowLineMixin), by the alpine surface pass (snow pack, bare rock, glaciers) and by the tree and structure lines ([alpine] in terra_continental-common.toml), so all agree. The surface pass moves it 25 down on north faces and 25 up on south faces.",
  "type": "minecraft:flat_cache",
  "argument": {
   "type": "minecraft:add",

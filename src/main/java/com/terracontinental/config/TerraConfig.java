@@ -15,6 +15,13 @@ public class TerraConfig {
     public static final ModConfigSpec.DoubleValue RADIAL_BIAS_STRENGTH;
     public static final ModConfigSpec.DoubleValue CENTRAL_LAND_BUMP;
     public static final ModConfigSpec.IntValue CENTRAL_LAND_RADIUS;
+    public static final ModConfigSpec.BooleanValue SPAWN_STEERING;
+    public static final ModConfigSpec.DoubleValue SPAWN_TARGET_AREA;
+    public static final ModConfigSpec.DoubleValue SPAWN_GAP_MIN;
+    public static final ModConfigSpec.DoubleValue SPAWN_GAP_MAX;
+    public static final ModConfigSpec.IntValue SPAWN_CANDIDATES;
+    public static final ModConfigSpec.DoubleValue SPAWN_MAX_OTHER_LAND;
+    public static final ModConfigSpec.IntValue SPAWN_ROUNDS;
     public static final ModConfigSpec.IntValue ADDITIONAL_CONTINENTS;
     public static final ModConfigSpec.IntValue CONTINENT_SPREAD;
     public static final ModConfigSpec.IntValue CONTINENT_RADIUS;
@@ -28,6 +35,7 @@ public class TerraConfig {
     public static final ModConfigSpec.IntValue CAVE_DEPTH_REFERENCE_Y;
     public static final ModConfigSpec.IntValue TREE_LINE_GAP;
     public static final ModConfigSpec.IntValue STRUCTURE_LINE_GAP;
+    public static final ModConfigSpec.IntValue DRY_START_MAX_WATER;
 
     static {
         BUILDER.push("continent_shaping");
@@ -61,8 +69,38 @@ public class TerraConfig {
                 .defineInRange("central_land_bump", 1.45, 0.0, 5.0);
 
         CENTRAL_LAND_RADIUS = BUILDER
-                .comment("Radius of the spawn-continent bump in blocks. Default: 9000")
-                .defineInRange("central_land_radius", 9000, 100, 100000);
+                .comment("Radius of the spawn-continent bump in blocks without steering; with spawn_steering, the scale",
+                         "the layouts are drawn at before they are sized to spawn_target_area. Default: 14500")
+                .defineInRange("central_land_radius", 14500, 100, 100000);
+
+        SPAWN_STEERING = BUILDER
+                .comment("Steer the spawn continent: try spawn_candidates layouts on a preview of the seed's land",
+                         "and keep the one closest to the size and neighbour targets below. Off = a round dome of",
+                         "central_land_radius at the origin, with the other continents where the seed puts them.")
+                .define("spawn_steering", true);
+        SPAWN_TARGET_AREA = BUILDER
+                .comment("Spawn continent's land area to aim for, in km2, as the loading map draws land (steering aims",
+                         "within about 15%). Default: 290")
+                .defineInRange("spawn_target_area", 290.0, 20.0, 5000.0);
+        SPAWN_GAP_MIN = BUILDER
+                .comment("Least distance in km from the spawn continent's coast to the nearest other continent's. Default: 3")
+                .defineInRange("spawn_gap_min", 3.0, 0.0, 50.0);
+        SPAWN_GAP_MAX = BUILDER
+                .comment("Greatest distance in km from the spawn continent's coast to the nearest other continent's. Default: 6")
+                .defineInRange("spawn_gap_max", 6.0, 0.0, 50.0);
+        SPAWN_CANDIDATES = BUILDER
+                .comment("Layouts tried per world when steering. More finds a closer fit, taking longer at world creation.",
+                         "Default: 48")
+                .defineInRange("spawn_candidates", 48, 1, 512);
+        SPAWN_MAX_OTHER_LAND = BUILDER
+                .comment("Most of the loading map (65 km across) that may be land besides the spawn continent, in %.",
+                         "Default: 15")
+                .defineInRange("spawn_max_other_land", 15.0, 0.0, 100.0);
+        SPAWN_ROUNDS = BUILDER
+                .comment("When no layout meets every target, rounds that try spawn_candidates more layouts on the",
+                         "seed's noise shifted elsewhere (a different continent shape, same seed). 1 = no retries.",
+                         "Default: 8")
+                .defineInRange("spawn_rounds", 8, 1, 64);
 
         ADDITIONAL_CONTINENTS = BUILDER
                 .comment("Extra continents placed deterministically from the world seed, distributed by angle around the origin. 0 disables. Default: 5")
@@ -102,35 +140,34 @@ public class TerraConfig {
                 .defineInRange("ocean_formation_humidity_band", 0.08, 0.0, 1.0);
 
         TEMPERATE_SPAWN_STRENGTH = BUILDER
-                .comment("How far the spawn continent's climate is pulled toward temperate (0..1). Tectonic's temperature",
-                         "zones are continent-sized, so a whole spawn continent can come out frozen; 1.0 gives it Terra",
-                         "Continental's temperate climate (still varied), 0.0 leaves Tectonic's climate alone. Other continents",
-                         "are never affected. Biome selection only - terrain is unchanged. Requires Tectonic; new chunks only.")
+                .comment("How far the spawn continent's climate is pulled toward temperate (0..1). The temperature",
+                         "zones are continent-sized, so a whole spawn continent can come out frozen; 1.0 gives it a",
+                         "temperate climate (still varied), 0.0 leaves its climate alone. Other continents are never",
+                         "affected. Biome selection only - terrain is unchanged. New chunks only.")
                 .defineInRange("temperate_spawn_strength", 1.0, 0.0, 1.0);
         TEMPERATE_SPAWN_INNER = BUILDER
                 .comment("Full-strength radius of the temperate spawn climate, as a multiple of central_land_radius.",
-                         "The spawn continent's coast lies well outside central_land_radius itself (~1.3x on the tested seed).")
-                .defineInRange("temperate_spawn_inner_factor", 1.5, 0.1, 10.0);
+                         "The spawn continent's coast lies around 0.8-1.1x central_land_radius.")
+                .defineInRange("temperate_spawn_inner_factor", 1.1, 0.1, 10.0);
         TEMPERATE_SPAWN_OUTER = BUILDER
                 .comment("Radius, as a multiple of central_land_radius, by which the temperate spawn climate has faded out.")
-                .defineInRange("temperate_spawn_outer_factor", 2.0, 0.1, 20.0);
+                .defineInRange("temperate_spawn_outer_factor", 1.5, 0.1, 20.0);
 
         BUILDER.pop();
 
         BUILDER.push("caves");
 
         CAVE_DEPTH_FLOOR_VALUE = BUILDER
-                .comment("Biome-depth value the BOTTOM of the world should map to, used by terra_continental:cave_depth.",
+                .comment("Biome-depth value the BOTTOM of the world maps to, for terra_continental:cave_depth_scale",
+                         "(scale = floor_value * 128 / (reference_y - world floor); the default gives 0.42).",
                          "Vanilla's depth axis puts the underground-biome window (dripstone_caves, lush_caves) at 0.2-0.9,",
-                         "surface biomes at 0.0 and 1.0, and deep_dark at 1.1. Mapping the world floor to 1.3 reproduces",
-                         "vanilla's banding proportionally: caves mostly inherit their surface biome, dripstone and lush",
-                         "appear at real cave depths, and deep_dark is confined to roughly the bottom 15%.",
-                         "Raise toward 1.6 for MORE deep_dark (a thicker bottom band); lower toward 1.05 for less.",
-                         "Below ~1.05 deep_dark stops generating entirely. Changing this requires regenerating chunks.")
-                .defineInRange("cave_depth_floor_value", 1.3, 0.5, 2.5);
+                         "surface biomes at 0.0 and 1.0, and deep_dark at 1.1; below y 32 the value is capped at 1.6.",
+                         "Lower it for less deep_dark and deeper dripstone and lush caves; below ~1.05 deep_dark stops",
+                         "generating entirely. Changing this requires regenerating chunks. Default: 1.88671875")
+                .defineInRange("cave_depth_floor_value", 1.88671875, 0.5, 2.5);
 
         CAVE_DEPTH_REFERENCE_Y = BUILDER
-                .comment("Y treated as the 'surface' when measuring the world's vertical span for cave_depth.",
+                .comment("Y treated as the 'surface' when measuring the world's vertical span for cave_depth_scale.",
                          "The scale is derived as floor_value * 128 / (reference_y - world floor), so the banding",
                          "follows the world floor (-512) - no hand-edited splines.",
                          "Sea level (63) is the right answer for almost every world; raise it only if your terrain",
@@ -148,6 +185,11 @@ public class TerraConfig {
         STRUCTURE_LINE_GAP = BUILDER
                 .comment("How far below the snow line surface structures stop starting. New chunks only.")
                 .defineInRange("structure_line_gap", 60, 0, 1000);
+        DRY_START_MAX_WATER = BUILDER
+                .comment("Land surface structures (no ocean, beach, river or swamp biome in their list) don't start",
+                         "where the ground is more than this many blocks under sea level. -1 turns the check off.",
+                         "New chunks only.")
+                .defineInRange("dry_start_max_water", 1, -1, 64);
 
         BUILDER.pop();
 

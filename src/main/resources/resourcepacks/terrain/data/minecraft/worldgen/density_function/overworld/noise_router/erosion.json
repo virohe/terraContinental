@@ -1,5 +1,5 @@
 {
- "_comment": "BIOMES BY ALTITUDE (2026-10-31). The biome erosion is vanilla's peaks value (-0.9) above the snow line (terra_continental:alpine/above_snow > 0, blended over 20 blocks) and kept out of the peaks and slopes bands (>= -0.37) below it, so frozen/jagged/howling peaks cover only ground above the line and lower slopes get their ordinary biomes (playtest: peak biomes covered whole ranges from y ~250, their snow a palette). Replaces the giant-only pull to peaks (giant_biome, 2026-10-24): the giant's top is above the line anyway. Biome selection only; terrain reads terra_continental:noise/continent/erosion.",
+ "_comment": "BIOMES BY ALTITUDE. The biome erosion is vanilla's peaks value (-0.9) above the snow line (terra_continental:alpine/above_snow > 0, blended over 20 blocks) and kept out of the peaks and slopes bands (>= -0.37) below it, so frozen/jagged/howling peaks cover only ground above the line and lower slopes get their ordinary biomes The giants' tops are above the line, so they get peak biomes too. Biome selection only; terrain reads terra_continental:noise/continent/erosion.",
  "type": "minecraft:add",
  "argument1": {
   "type": "minecraft:max",

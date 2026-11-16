@@ -13,10 +13,16 @@
     "terrain.BiomeSnowLineMixin",
     "alpine.TreeLineMixin",
     "alpine.StructureLineMixin",
+    "StructureDryStartMixin",
     "terrain.NoiseSeedMixin",
     "terrain.LavaLevelMixin",
+    "terrain.CaveBiomeContainmentMixin",
     "terrain.MonumentDepthMixin",
-    "terrain.OffsetListMixin"
+    "terrain.OffsetListMixin",
+    "MinecraftServerAccessor",
+    "VillageCarverMixins",
+    "WorldCarverVillageMixin",
+    "BeardifierVillageMixin"
   ],
   "injectors": {
     "defaultRequire": 1
@@ -25,6 +31,10 @@
     "client.CreateWorldScreenMixin",
     "client.WorldCreationUiStateMixin",
     "client.WorldCreationUiStateOrderMixin",
-    "client.LevelLoadingScreenMixin"
+    "client.LevelLoadingScreenMixin",
+    "client.MinecraftWorldLoadMixin",
+    "client.LoadingMusicMixin",
+    "client.SoundVolumeFadeMixin",
+    "client.CreateWorldScreenInvoker"
   ]
 }

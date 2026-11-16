@@ -5,6 +5,158 @@ reconstructed on 2026-09-27; everything from
 0.0.1 to 0.7.3 landed in one catch-up commit (`15597b7`) because it had not been committed as
 it happened. Earlier history is in `git log`.
 
+## 0.13.0 — 2026-11-15
+0.12.0 was never released on its own; its changes are part of this release and listed at the end
+of this section.
+
+- **The menu music keeps playing while a world loads** (user, 2026-11-11: the load runs for minutes). Vanilla
+  stopped all sound when the load began and never ticked music during it; `LoadingMusicMixin` skips that stop
+  for a load started from the menu and ticks music and sound in the wait loop.
+- **Crossfade into the world** (user, 2026-11-11): from 100% to the world showing takes about 6.5 s. Over that gap
+  the menu music fades out (6 s from 100%) and game sounds fade in (5 s from the join), equal-power curves
+  (`LoadingFade`, volumes scaled in `SoundEngine.calculateVolume`). In-game music follows at vanilla's usual delay.
+- **Dripstone and lush caves in big pockets** (TI-101, known since 0.6.9 as dripstone and lush caves at 0%).
+  Vanilla gives a cave the NEAREST underground box, and the surface biomes sit at depth 0 and 1, so mid-band
+  they are about 0.45 away: dripstone took caves wherever continentalness passed about 0.35 (not 0.8) and lush
+  wherever humidity passed about 0.25 (not 0.7). That made dripstone 20-45% of cave land round some spawns and
+  lush 0% on a dry one (the user's playtest, 2026-11-11, seed 1742398067288660832), and the first fix (small
+  lush pockets, ~50 blocks across) was too fine (second playtest). Now an underground biome is kept only
+  where the climate lies inside its box (`CaveBiomeContainmentMixin`, wrapping TerraBlender's lookup too);
+  elsewhere the cave takes the biome its climate picks at the surface. Underground, `noise_router/continents`
+  and `noise_router/vegetation` cap continentalness near 0.6 and humidity near 0.6, and two 3-D noises
+  (`terra_continental:cave_pocket_dripstone`, `cave_pocket_lush`, first octave -10) pull them to 1.0 and 0.85
+  inside pockets. Round spawn (6 km square, y 0 / -64 / -160, 3 seeds, real-pack rig): dripstone 3.6% and lush
+  3.0% of cave area, pockets about 500-550 m across (area-weighted) and 1-1.2 km apart, plain caves between;
+  deep dark unchanged. Chosen over pockets of 300-380 m 0.5-0.6 km apart, and of 500 m 1.2-1.7 km apart at
+  1.6-2%. Below the surface only: both terms blend in from depth 0.1, so surface biomes and terrain are
+  unchanged. Existing worlds change cave biomes in chunks generated after the update.
+- **`/continental cave_census <radius> <step> [seed] [noise settings]`**: underground biome shares at y 48 to
+  -440 through the generator's own climate sampler, with continentalness, humidity and depth histograms, to
+  `seedscan/cave_census_*.json`. The optional noise settings id compares climate variants in one boot.
+  It also writes the biome grid next to the JSON (`.bin`: little-endian uint16 palette indices by height, then z,
+  then x; the JSON gains `palette`, `grid_heights` and `n`) for patch-size and spacing maps.
+- **Land structures don't start under water** (playtest 2026-11-11: a village house standing in a
+  shallow channel between low islands, biome "Prairie"). Biomes follow the smoothed
+  continentalness, while the ground also takes the ocean noise, the wetland regions and the 3-D
+  noise, so low land near a coast can be a land biome over a few blocks of sea. A surface structure
+  whose biome list has no ocean, beach, river or swamp biome is now refused where its start
+  column's ground is more than `dry_start_max_water` (1; -1 = off) blocks under sea level
+  (`DryStarts`, `StructureDryStartMixin`). It reads the plan's height estimate and asks the
+  generator for the exact ocean floor only near the water line. Village pieces built out from a
+  dry start can still reach over water.
+- **TC: Large Biomes takes Temperate's vegetation** (the user, 2026-11-11, after the biome size study). Large's
+  vegetation noise was 4x vanilla (xz scale 0.0625); it is now the pack's own (0.03), as in TC: Temperate, while
+  temperature stays 4x vanilla with the temperate spawn continent. Biome patches on land 1.86 -> 3.01 km²
+  (length-weighted walk 772 -> 909 m, 204 -> 163 patches per 100 km²; TC: Temperate 2.98 km²), 5 seeds, 32 km
+  square, rivers filled, real-pack rig. TC: Climates keeps the 4x vanilla vegetation. Existing Large worlds
+  change biomes in chunks generated after the update.
+- **`/continental biome_map_settings <noise settings> <radius> <step> <seed> <centerX> <centerZ>`**: biome_map
+  with the climate read from another noise-settings entry (a world datapack's variant), so climate variants
+  compare in one server boot. The biome source stays the world's. Used by the biome size study (2026-11-11).
+- **A steered spawn continent** (the user, 2026-11-10: on the loading map the spawn continent read as
+  a small round island while bigger, rougher continents lay out at sea; later, many retries to find
+  an acceptable one: too big, too small, too round, coasts smoother than the neighbours', neighbours
+  touching or missing). Its land bump was one round dome of radius 9,000 against the other
+  continents' 14,000 +-30%, at a fixed height whatever the noise under it, with the others placed
+  without regard to it. Now `SpawnSteer` tries `spawn_candidates` (48) layouts per world, each a
+  branching chain of 4-7 lobes in noise-bent coordinates, each lobe's height set from the noise
+  under it, scaled to `spawn_target_area`, with the seed's two nearest continents moved to sit a
+  drawn gap from its coast and the rest kept clear; builds each one's continent field on the
+  loading map's grid from the seed's own noise; and keeps the one closest to the targets: about
+  290 km2 (+-15%), roundness 0.55-0.82, the nearest neighbour's coast `spawn_gap_min`-`spawn_gap_max`
+  (3-6) km away, and no more than `spawn_max_other_land` (15%) of the map land besides it. Land is
+  measured as the loading map draws it (continentalness above -0.19, where vanilla's ocean biomes
+  end; at first -0.11, which put a neighbour the user saw 2 km away at 3). While no layout hits
+  every target, up to `spawn_rounds` (8) more rounds try again on the seed's noise shifted by a drawn
+  offset, which the continent field then keeps: a new shape, same seed (playtest 2026-11-10: two of
+  five steered worlds bad, one too much land around, one neighbour too close). Same seed, same world. Chosen over one-layout rules on 40 previewed seeds: every
+  target on 82% of seeds, against 18% for rules and 5% for fixed lobes; the targets were set from the
+  user's own session (they pass the one world kept, fail all five discarded). The search takes about
+  0.6 s a round at world creation (real-pack rig). The giant massifs follow the moved continents, and the
+  spawn continent's sits in its core lobe. New `[continent_shaping]` keys: `spawn_steering`,
+  `spawn_target_area`, `spawn_gap_min`, `spawn_gap_max`, `spawn_candidates`, `spawn_max_other_land`,
+  `spawn_rounds`; `spawn_steering =
+  false` gives the old dome of `central_land_radius` (default 14,500). The temperate spawn climate's
+  factors default to 1.1 / 1.5 (were 1.5 / 2.0). Previewer: `preview/steer_core.py` is the reference
+  implementation; the rig picked the same layout with the same measurements on two seeds. New
+  chunks only; old worlds get seams.
+- **BWG's sea formations count as sea** on the loading map and for the village planner (the user,
+  2026-11-10): `lush_stacks` and `dead_sea` have no "ocean" in their names, so their narrow bands drew
+  as light-green squiggles of land out at sea. The biomes themselves are unchanged.
+- **The `[caves]` settings work.** `cave_depth_floor_value` and `cave_depth_reference_y` were never
+  read: the terrain's `noise_router/depth.json` multiplied the depth by a literal 0.42 and nothing
+  referenced `terra_continental:cave_depth_scale`. It now does. The floor default becomes 1.88671875
+  (was 1.3), the value that gives exactly 0.42, so cave biomes are unchanged (previewer: identical
+  biome depth over 8 heights x 2,601 columns). An existing config still says 1.3, which would now
+  mean less deep_dark and deeper dripstone and lush caves: set it to 1.88671875 to keep them as they
+  were.
+
+- **Map statistics beside the loading map** (the user, 2026-11-10): a box to the map's left with
+  the spawn continent's land area and highest point, the gap to the nearest other continent, how
+  much of the map is land, and the villages and hamlets placed so far. Read from the finished world
+  plan, so it counts land as the map draws it. Left out when the window is too narrow.
+
+- **Every counted village has villagers in it; the empty ones are rare** (the user, 2026-11-10: a
+  planned spawn village in test world 87 generated as a vanilla zombie village, and
+  `/continental villages` listed it). Vanilla's five village town-centre pools lose their zombie
+  variants (about 2% of rolls), so every vanilla village, planned or on a grid, is inhabited.
+  Abandoned villages live on as their own structures, `terra_continental:abandoned_village/<type>`
+  (vanilla's zombie town centres, same biomes), and with BWG's Forgotten villages and Pumpkin
+  Patches they are placed by the new `terra_continental:per_continent` placement: one or two of
+  each per continent, on their biomes, on fairly level ground, at least 1,200 blocks from a planned
+  village (until now Pumpkin Patches were on a grid about as dense as villages). None of the three
+  is in the village tag, so the loading map, the planner and `/continental villages` never count
+  them; `/locate` finds them. Every start logs what the server actually loaded
+  (`[village-pools] village town centres: N weighted entries, 0 zombie`) and warns if a mod or
+  datapack has put zombie centres back.
+
+- **Villages sit on whole ground** (the user, 2026-11-11, world 91: a planned plains village on flat
+  ground had a ravine 4-6 blocks wide and up to 13 deep along a street, and a pit 22 deep inside it;
+  "it just kinda breaks immersion"). Three changes:
+  - **No carving under villages.** Cave and ravine carvers run after a village is laid out and never
+    looked at it. Now, while a chunk is carved, every village touching it (the village tag, the
+    abandoned villages, BWG's villages) keeps its area, 8 blocks wider, from 16 blocks under its lowest
+    piece up: a ravine heading for a village ends at a wall short of it, deeper caves pass underneath.
+  - **One ground rule for every village** (`VillageFootprint`): the planned spawn villages, the random
+    village grids on the other continents (vanilla checked only the biome) and the rare per-continent
+    villages. Within 48 blocks `max_relief` as before; out to 128 blocks now 1.3x `max_relief` across
+    the whole spread (was 2x) and at most 8 between rings 32 blocks apart (was 24).
+  - **Gentler ground round village houses**: the terrain fit for `beard_thin` pieces (every vanilla
+    and BWG village house) reaches twice as far, so a house on a slope sits in a graded bank rather
+    than beside a cut wall. Works over C2ME's replacement of the same code; logs
+    `[village-ground] wide terrain fit round village houses is active` once per start.
+  Rig, world 91's seed, all ten planned villages generated: columns sunk 3+ below a village's floor
+  1,198 -> 0; bare ground steps of 4+ blocks next to houses 164 -> 7. The planner still placed 10
+  villages, swapping its three hilliest sites (y 140 and y 203 among them) for level ones.
+- **"Try a New Seed" on the loading map** (the user, 2026-11-10: a poor spawn continent should be
+  caught while the world loads, not after). Under the map are a status line, a warning line and the
+  button, shown only while a new world is being created. A click asks first: the button turns into
+  "Keep This World" in the same place, and "Discard and Retry" appears beside it, so a double click
+  keeps the world. On confirm the integrated server is stopped (its running flag cleared; the
+  village planner and Terra Towns' hamlet search see `isRunning()` go false and give up), vanilla's
+  load loop is let out once the server thread ends (`MinecraftWorldLoadMixin`), and the world is
+  deleted and created again through the Create World screen's own path with the same name, game
+  mode, rules, world type and data packs on a random seed.
+- **Village spread check**: once the spawn villages are planned, the planner judges their spread
+  and the loading map warns "Village placement appears to be non-optimal" when not all villages
+  fit, or over 25% of the land lies farther than
+  0.75 x sqrt(land per village) from every village. Logged as `[spawn-villages] spread: ...`.
+  The user's 2026-11-10 world (58 km2, 8 of 10 villages, 42% far) fails both. A shrunken gap
+  alone isn't counted: a small continent with all ten villages well spread is fine.
+- **The loading map shows the work live** (the user, 2026-11-10: "I want to watch and see how the
+  program runs"). The map paints as the world plan learns each cell, instead of waiting on vanilla's
+  spawn-area percentage, which only moved in the last few seconds after the plan and villages were
+  done. The village planner shows its candidate spots (faint dots), the spot being checked (a ring),
+  the spots that failed (dark red) and each village the moment it is placed, with its progress on the
+  status line. Real time for now; a slowed replay is the fallback if it's too fast to follow.
+- **One percentage for the whole load**: the map, the villages, the spawn area, the hamlet search and
+  the hamlet builds each get a share (15/5/5/15/60 on a new world with Terra Towns, roughly their
+  share of the time; 60/20/20 otherwise), and it never goes backwards.
+- **Fix: the loading map starts blank.** Its texture was never uploaded until the first cells were
+  painted, so it showed whatever the graphics driver handed back; after a retry that was the
+  discarded world's map, at 0% (the user, 2026-11-10).
+- `LoadingStatus.warn` (warning line, reached by Terra Towns by reflection) and `requestRetry`.
+
 ## 0.11.0 — 2026-11-01
 Snow and ice as a feature, with tree and structure lines (playtest 2026-10-31: snow came with the
 peak biomes as a palette from y ~250, cliffs included; ice everywhere on the peaks; trees to y ~1,000).

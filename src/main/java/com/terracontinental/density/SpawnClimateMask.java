@@ -39,7 +39,7 @@ public final class SpawnClimateMask implements DensityFunction.SimpleFunction {
     private double[] params() {
         double[] p = params;
         if (p == null) {
-            double strength = 1.0, innerFactor = 1.5, outerFactor = 2.0, radius = 9000.0;
+            double strength = 1.0, innerFactor = 1.1, outerFactor = 1.5, radius = 14500.0;
             try {
                 strength = TerraConfig.TEMPERATE_SPAWN_STRENGTH.get();
                 innerFactor = TerraConfig.TEMPERATE_SPAWN_INNER.get();

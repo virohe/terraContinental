@@ -1,0 +1,31 @@
+{
+  "structures": [
+    {
+      "structure": "terra_continental:abandoned_village/plains",
+      "weight": 1
+    },
+    {
+      "structure": "terra_continental:abandoned_village/desert",
+      "weight": 1
+    },
+    {
+      "structure": "terra_continental:abandoned_village/savanna",
+      "weight": 1
+    },
+    {
+      "structure": "terra_continental:abandoned_village/snowy",
+      "weight": 1
+    },
+    {
+      "structure": "terra_continental:abandoned_village/taiga",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "terra_continental:per_continent",
+    "salt": 518337201,
+    "biomes": "#terra_continental:has_structure/abandoned_village",
+    "min_count": 1,
+    "max_count": 2
+  }
+}

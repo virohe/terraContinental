@@ -51,6 +51,8 @@ public final class GiantPeaksFunction implements DensityFunction {
     private static final double GRAIN_SCALE = 16.0;
 
     private final NoiseHolder jitterNoise;
+    /** continent_base, to find the steered layout in (SpawnSteer); empty = the unsteered continents. */
+    private final Optional<DensityFunction> continents;
     private final double height;
     private final double radius;
     private final double reach;
@@ -72,7 +74,7 @@ public final class GiantPeaksFunction implements DensityFunction {
 
     public static final MapCodec<GiantPeaksFunction> CODEC = RecordCodecBuilder.mapCodec(instance ->
             instance.group(
-                    NoiseHolder.CODEC.fieldOf("jitter_noise").forGetter(f -> f.jitterNoise),
+                    Source.CODEC.forGetter(f -> new Source(f.jitterNoise, f.continents)),
                     Codec.DOUBLE.fieldOf("height").forGetter(f -> f.height),
                     Codec.DOUBLE.optionalFieldOf("radius", 2400.0).forGetter(f -> f.radius),
                     Codec.DOUBLE.optionalFieldOf("reach", 0.35).forGetter(f -> f.reach),
@@ -90,12 +92,13 @@ public final class GiantPeaksFunction implements DensityFunction {
                     NoiseHolder.CODEC.optionalFieldOf("detail_noise").forGetter(f -> f.detailNoise)
             ).apply(instance, GiantPeaksFunction::new));
 
-    public GiantPeaksFunction(NoiseHolder jitterNoise, double height, double radius, double reach, String output,
+    public GiantPeaksFunction(Source source, double height, double radius, double reach, String output,
                               double maskReach, double warp, double spurs, double texture, double grain,
                               double summit,
                               double summitWidth, double summitPower, Companions companions, double variety,
                               Optional<NoiseHolder> detailNoise) {
-        this.jitterNoise = jitterNoise;
+        this.jitterNoise = source.jitterNoise();
+        this.continents = source.continents();
         this.height = height;
         this.radius = radius;
         this.reach = reach;
@@ -127,7 +130,7 @@ public final class GiantPeaksFunction implements DensityFunction {
     private Massif[] peaks() {
         Massif[] p = peaks;
         if (p == null) {
-            double centralRadius = 9000.0, spread = 60000.0, contRadius = 14000.0;
+            double centralRadius = 14500.0, spread = 60000.0, contRadius = 14000.0;
             int extra = 5;
             try {
                 centralRadius = TerraConfig.CENTRAL_LAND_RADIUS.get();
@@ -138,6 +141,13 @@ public final class GiantPeaksFunction implements DensityFunction {
                 // Defaults above; configs load long before worldgen in practice.
             }
             double[][] centers = RadialFalloffFunction.buildCenters(jitterNoise, extra, spread, contRadius);
+            // Steered (SpawnSteer): the moved continents, and the spawn massif within the core lobe.
+            RadialFalloffFunction falloff = continents.map(GiantPeaksFunction::findFalloff).orElse(null);
+            if (falloff != null && falloff.steered()) {
+                double[][] all = falloff.continents();
+                centralRadius = all[0][2];
+                centers = java.util.Arrays.copyOfRange(all, 1, all.length);
+            }
             p = new Massif[centers.length + 1];
             for (int k = 0; k <= centers.length; k++) {
                 double cx = k == 0 ? 0.0 : centers[k - 1][0];
@@ -284,7 +294,8 @@ public final class GiantPeaksFunction implements DensityFunction {
 
     @Override
     public DensityFunction mapAll(Visitor visitor) {
-        return visitor.apply(new GiantPeaksFunction(visitor.visitNoise(jitterNoise), height, radius, reach, output,
+        return visitor.apply(new GiantPeaksFunction(
+                new Source(visitor.visitNoise(jitterNoise), continents.map(df -> df.mapAll(visitor))), height, radius, reach, output,
                 maskReach, warp, spurs, texture, grain, summit, summitWidth, summitPower, companions, variety,
                 detailNoise.map(visitor::visitNoise)));
     }
@@ -314,6 +325,26 @@ public final class GiantPeaksFunction implements DensityFunction {
      * {@code companion_width} of the massif's radius wide, {@code companion_dist} of it out. A
      * separate record because a codec group holds at most 16 fields.
      */
+    /** The jitter noise, and where to find the continent layout; nested so the codec stays at 16 fields. */
+    public record Source(NoiseHolder jitterNoise, Optional<DensityFunction> continents) {
+        static final MapCodec<Source> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+                NoiseHolder.CODEC.fieldOf("jitter_noise").forGetter(Source::jitterNoise),
+                DensityFunction.HOLDER_HELPER_CODEC.optionalFieldOf("continents").forGetter(Source::continents)
+        ).apply(instance, Source::new));
+    }
+
+    private static RadialFalloffFunction findFalloff(DensityFunction df) {
+        RadialFalloffFunction[] found = new RadialFalloffFunction[1];
+        df.mapAll(new Visitor() {
+            @Override
+            public DensityFunction apply(DensityFunction f) {
+                if (found[0] == null && f instanceof RadialFalloffFunction r) found[0] = r;
+                return f;
+            }
+        });
+        return found[0];
+    }
+
     public record Companions(int count, double height, double width, double dist) {
         static final MapCodec<Companions> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Codec.INT.optionalFieldOf("companions", 0).forGetter(Companions::count),

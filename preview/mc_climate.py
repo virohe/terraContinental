@@ -63,11 +63,21 @@ class RadialParams:
     ocean_bias: float = 0.65
     radial_bias_strength: float = 0.2
     central_land_bump: float = 1.45
-    central_land_radius: float = 9000.0
+    central_land_radius: float = 14500.0
     additional_continents: float = 5.0   # int in Java; float here for CLI/sliders
     continent_spread: float = 60000.0
     continent_radius: float = 14000.0
     continent_bump: float = 1.45
+    # Spawn-continent steering (SpawnSteer.java / steer_core.py, 2026-11-10): the best of
+    # spawn_candidates layouts by size (km2), shape and the nearest neighbour's gap (km).
+    # spawn_steering 0 = the old round dome of central_land_radius and unsteered continents.
+    spawn_steering: float = 1.0
+    spawn_target_area: float = 290.0
+    spawn_gap_min: float = 3.0
+    spawn_gap_max: float = 6.0
+    spawn_candidates: float = 48.0
+    spawn_max_other_land: float = 15.0   # % of the loading map that may be land besides the spawn continent
+    spawn_rounds: float = 8.0
 
     @classmethod
     def from_datapack(cls, path=_DEFAULT_MASK_JSON):
@@ -103,10 +113,14 @@ def continent_centers(jitter, p):
     return np.cos(angle) * dist, np.sin(angle) * dist, radius
 
 
-def radial_falloff(upstream, x, z, distance, p, jitter):
-    """1:1 with RadialFalloffFunction.compute (multi-continent version)."""
-    bumped = upstream + p.central_land_bump * _smoothstep_falloff(
-        distance / p.central_land_radius)
+def radial_falloff(upstream, x, z, distance, p, jitter, layout=None, warp=None):
+    """1:1 with RadialFalloffFunction.compute. layout: the steered layout (steer_core.steer), whose
+    spawn lobes and continent centres replace the dome and buildCenters; warp(x, z) -> (wx, wz)."""
+    if layout is not None:
+        import steer_core
+        wx, wz = warp(x, z)
+        return steer_core.falloff(layout, upstream, x, z, p, wx, wz)
+    bumped = upstream + p.central_land_bump * _smoothstep_falloff(distance / p.central_land_radius)
 
     cx, cz, cr = continent_centers(jitter, p)
     for k in range(cx.size):
@@ -227,7 +241,27 @@ class ClimateSampler:
             for key in results[0]
         }
         out["jitter"] = self.jitter   # per-seed scalar table, not per-pixel
+        out["jitter_noise"] = self.continent_jitter
+        out["steer"] = self.steer_layout
+        out["continents_at"] = lambda X, Z: self._raw_block(
+            np.ravel(X), np.ravel(Z))["raw_continents"].reshape(np.shape(X))
         return out
+
+
+def _steer_warp(noise, layout, x, z):
+    import steer_core
+    return steer_core.warp_at(noise, x, z, layout["wavelength"]) if layout else (0.0, 0.0)
+
+
+def _sampler_steer_layout(self, p):
+    """The steered layout for this sampler's seed (steer_core.layout_for, its upstream from here)."""
+    import steer_core
+    return steer_core.layout_for(
+        ("sampler", self.seed), lambda X, Z: self._raw_block(X.ravel(), Z.ravel())["raw_continents"].reshape(X.shape),
+        self.continent_jitter, continent_centers(self.jitter, p), p)
+
+
+ClimateSampler.steer_layout = _sampler_steer_layout
 
 
 def tectonic_ridge(raw):
@@ -253,8 +287,13 @@ def finish_fields(raw, params):
     ridges formula (the parts that change when the sliders move).
     Returns (continents, erosion, weirdness).
     """
-    base = radial_falloff(raw["raw_continents"], raw["x"], raw["z"],
-                          raw["distance"], params, raw["jitter"])
+    layout = raw["steer"](params) if params.spawn_steering > 0 else None
+    upstream = raw["raw_continents"]
+    if layout and any(layout["offset"]):
+        upstream = raw["continents_at"](raw["x"] + layout["offset"][0], raw["z"] + layout["offset"][1])
+    base = radial_falloff(upstream, raw["x"], raw["z"],
+                          raw["distance"], params, raw["jitter"], layout,
+                          lambda x, z: _steer_warp(raw["jitter_noise"], layout, x, z))
     base = np.maximum(base, -1.02)                      # continent_base.json
 
     ridge = tectonic_ridge(raw)

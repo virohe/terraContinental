@@ -120,10 +120,18 @@ class TerrainSim(continental_climate.ClimateSim):
         detail = (ctx.noise(node.get("detail_noise", "terra_continental:tectonic"))
                   if warp or spurs or texture or grain else None)
         jitter = self._jitter_table(ctx, node.get("jitter_noise", "terra_continental:continent_jitter"))
-        cx, cz, cr = mc_climate.continent_centers(jitter, self.radial)
-        cx = np.concatenate([[0.0], cx])
-        cz = np.concatenate([[0.0], cz])
-        cr = np.concatenate([[self.radial.central_land_radius], cr])
+        if self.radial.spawn_steering > 0:
+            # The steered layout's continents; the spawn massif within the core lobe
+            # (GiantPeaksFunction.peaks).
+            lay = self.steer_layout(ctx)
+            cx = np.concatenate([[0.0], lay["centers"][0]])
+            cz = np.concatenate([[0.0], lay["centers"][1]])
+            cr = np.concatenate([[lay["core"]], lay["centers"][2]])
+        else:
+            cx, cz, cr = mc_climate.continent_centers(jitter, self.radial)
+            cx = np.concatenate([[0.0], cx])
+            cz = np.concatenate([[0.0], cz])
+            cr = np.concatenate([[self.radial.central_land_radius], cr])
         noise = ctx.noise(node.get("jitter_noise", "terra_continental:continent_jitter"))
         out = np.zeros(ctx.shape)
         for k in range(cx.size):

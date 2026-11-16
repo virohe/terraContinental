@@ -48,7 +48,7 @@ public class TerraStructureConfig {
         COBBLEMON_SPACING_MULTIPLIER = BUILDER
                 .comment("EXTRA spacing multiplier for Cobblemon's structures (habitats, ruins, gimmi towers, fishing",
                          "boats, shipwreck coves), on top of structure_spacing_multiplier. Their own spacing is 15-30",
-                         "chunks, so at 1.0 ruins and habitats turn up every few hundred blocks (playtest 2026-10-31).",
+                         "chunks, so at 1.0 ruins and habitats turn up every few hundred blocks.",
                          "Count scales as 1/multiplier^2: 2.0 = a quarter as many, 3.0 = a ninth. Default: 2.0")
                 .defineInRange("cobblemon_spacing_multiplier", 2.0, 0.1, 20.0);
         BUILDER.pop();
@@ -69,9 +69,10 @@ public class TerraStructureConfig {
                          "if the land cannot fit `count` villages this far apart.")
                 .defineInRange("min_gap", 3000, 500, 20000);
         SPAWN_VILLAGE_MAX_RELIEF = BUILDER
-                .comment("Steepest ground a spawn-continent village may start on: the most the surface may rise or fall",
-                         "within 48 blocks of its centre (7x7 samples); out to 128 blocks the limit is twice this, and no",
-                         "16-block step may rise more than 12. Height above sea level is not limited.")
+                .comment("Steepest ground a village may start on (planned spawn villages, the random village grids and the",
+                         "rare abandoned ones): the most the surface may rise or fall within 48 blocks of its centre (7x7",
+                         "samples); out to 128 blocks the limit is 1.3 times this, and no more than 8 between rings 32",
+                         "blocks apart. Height above sea level is not limited.")
                 .defineInRange("max_relief", 14, 2, 200);
         SPAWN_VILLAGE_THEMED_MAX = BUILDER
                 .comment("At most this many spawn-continent villages may be climate villages (desert, savanna, snowy",

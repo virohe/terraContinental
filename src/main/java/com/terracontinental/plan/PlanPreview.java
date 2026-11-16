@@ -31,4 +31,9 @@ public interface PlanPreview {
 
     /** Share of cells known, 0..1. */
     float progress();
+
+    /** The map's statistics once every cell is known; null before (or for a stub preview). */
+    default MapStats stats() {
+        return null;
+    }
 }
