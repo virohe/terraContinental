@@ -375,8 +375,11 @@ public final class MapReveal {
     private static Path saveFileFor(Minecraft mc) {
         String id;
         if (mc.getSingleplayerServer() != null) {
+            // The world's own folder: getWorldPath(ROOT) is "<saves>/<world>/." and normalises to
+            // "<saves>/<world>". Taking its parent named every world "saves", so all single-player
+            // worlds shared one file and a new world skipped chunks revealed in another.
             id = "sp-" + mc.getSingleplayerServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
-                    .toAbsolutePath().normalize().getParent().getFileName();
+                    .toAbsolutePath().normalize().getFileName();
         } else if (mc.getCurrentServer() != null) {
             id = "mp-" + mc.getCurrentServer().ip;
         } else {

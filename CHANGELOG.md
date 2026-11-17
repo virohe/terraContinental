@@ -5,6 +5,13 @@ reconstructed on 2026-09-27; everything from
 0.0.1 to 0.7.3 landed in one catch-up commit (`15597b7`) because it had not been committed as
 it happened. Earlier history is in `git log`.
 
+## 0.14.1 — 2026-11-17
+
+- **Map reveal: one save file per world.** 0.14.0 named the reveal's save file after the folder that holds
+  the worlds, not the world, so every single-player world shared `sp-saves.bin`: a new world loaded the
+  chunks revealed in another and never sketched those positions. Found in the playtest world's smoke test
+  (it loaded 6,140 chunks from the test world). Old `sp-saves.bin` files can be deleted.
+
 ## 0.14.0 — 2026-11-16
 
 - **Continent atlas and names** (user, 2026-11-16). The whole overworld out to the soft border plus two
