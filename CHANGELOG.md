@@ -5,6 +5,28 @@ reconstructed on 2026-09-27; everything from
 0.0.1 to 0.7.3 landed in one catch-up commit (`15597b7`) because it had not been committed as
 it happened. Earlier history is in `git log`.
 
+## 0.14.2 — 2026-11-26
+
+- **Worlds open ready** (user, 2026-11-26: "I really want the world to load up right away when a player
+  hops in"). Three results that every world load worked out again are now kept in the world, in
+  `<world>/data/terra_continental/`, and read back: the spawn continent's layout (`spawn_layout.dat`, ~4 s),
+  the world plan (`world_plan.dat`, ~15 s) and the spawn-village plan (`spawn_villages.dat`, up to two
+  minutes of checks). On a copy of the pregenerated Sinnoh world they ran during the first two minutes after
+  joining and the server fell 46 s behind; on the next join the plan was read in 114 ms, the villages in
+  35 ms (the same 10), and the server never fell behind. Each file carries a fingerprint of the seed, the
+  worldgen registries and the versions of the mods that fill them, the datapacks and Terra Continental's
+  common and structure settings; when any of those differs the file is ignored and the result worked out
+  again, as before. Client-only mods don't count, so a world pregenerated on a dedicated server matches in
+  the client.
+- **Pregen waits for Distant Horizons.** `/continental pregenerate` stays in its `lods` phase until Distant
+  Horizons has nothing queued or running and has finished no task for a minute, instead of ending when DH's
+  pregen starts. DH's own pregen reports done while it still builds the coarser detail levels; a world opened
+  before then has LODs filling in and a busy game. Restarting the server in the `lods` phase starts DH's
+  pregen again.
+- **JourneyMap auto-mapping is off by default** (`maps.journeymap_debug_automap`, user, 2026-11-26). Mapping
+  a pregenerated continent on joining took minutes, slowed the game and filled the chat. JourneyMap's Actions
+  menu (Automap) still maps the save on demand. An existing client config keeps its old value.
+
 ## 0.14.1 — 2026-11-17
 
 - **Map reveal: one save file per world.** 0.14.0 named the reveal's save file after the folder that holds

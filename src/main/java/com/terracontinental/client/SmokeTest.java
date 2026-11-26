@@ -55,6 +55,10 @@ public final class SmokeTest {
         if (mc.player == null || mc.level == null) return;
         t++;
         try {
+            // Distant Horizons' work in hand every 10 s: a pregenerated world should open with none.
+            if (t % 200 == 1 && net.neoforged.fml.ModList.get().isLoaded("distanthorizons")) {
+                LOGGER.info("[smoke] t={} distant horizons work: {}", t, com.terracontinental.atlas.DhWork.snapshot());
+            }
             step(mc);
         } catch (Throwable ex) {
             LOGGER.error("[smoke] step at t={} failed", t, ex);

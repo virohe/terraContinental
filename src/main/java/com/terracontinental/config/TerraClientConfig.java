@@ -28,8 +28,10 @@ public final class TerraClientConfig {
                 .define("xaero_explore_only", true);
         JOURNEYMAP_DEBUG_AUTOMAP = b
                 .comment("With JourneyMap installed, single-player worlds are auto-mapped from the save on joining",
-                        "(regions not mapped yet): JourneyMap becomes a debug view of all generated terrain.")
-                .define("journeymap_debug_automap", true);
+                        "(regions not mapped yet): JourneyMap becomes a debug view of all generated terrain. Off by",
+                        "default: mapping a pregenerated continent takes minutes, slows the game while it runs and",
+                        "fills the chat. JourneyMap's own Actions menu (Automap) does the same on demand.")
+                .define("journeymap_debug_automap", false);
         b.pop();
         b.push("reveal");
         REVEAL = b

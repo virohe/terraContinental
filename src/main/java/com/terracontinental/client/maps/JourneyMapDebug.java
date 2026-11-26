@@ -10,8 +10,10 @@ import org.slf4j.Logger;
 
 /**
  * JourneyMap as the debug map (user, 2026-11-16: the map mod that doesn't ship "will show all of
- * the pregenerated terrain as a debug source"). In single-player, a few seconds after joining, it
- * runs JourneyMap's own "Automap: missing regions" over the save, the same as its Actions menu.
+ * the pregenerated terrain as a debug source"). With journeymap_debug_automap on, a few seconds
+ * after joining a single-player world it runs JourneyMap's own "Automap: missing regions" over the
+ * save, the same as its Actions menu. Off by default: on a pregenerated continent it runs for
+ * minutes, slows the game and fills the chat as the world opens (the user, 2026-11-26).
  * Only loaded when JourneyMap is installed; JourneyMap 6.0.9's classes are called directly.
  */
 public final class JourneyMapDebug {
@@ -27,7 +29,7 @@ public final class JourneyMapDebug {
     }
 
     public static void onLogin(ClientPlayerNetworkEvent.LoggingIn e) {
-        countdown = available() && TerraClientConfig.get(TerraClientConfig.JOURNEYMAP_DEBUG_AUTOMAP, true)
+        countdown = available() && TerraClientConfig.get(TerraClientConfig.JOURNEYMAP_DEBUG_AUTOMAP, false)
                 && Minecraft.getInstance().isLocalServer() ? DELAY_TICKS : -1;
     }
 

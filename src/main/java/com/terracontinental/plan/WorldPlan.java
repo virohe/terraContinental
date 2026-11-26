@@ -38,6 +38,8 @@ import java.util.stream.IntStream;
  *   <li>whether the biome at sea level is an ocean, the land test the village planner has always used
  *       (rivers and lakes count as land).</li>
  * </ul>
+ * The finished plan is kept in the world ({@code data/terra_continental/world_plan.dat}), so a
+ * world that has been opened before reads it back instead of planning again (~15 s).
  * This version describes what the noise makes; it does not shape terrain yet. Plan-driven shaping
  * (ranges, rivers placed by the plan and read back by density functions) builds on it.
  */
@@ -114,6 +116,14 @@ public final class WorldPlan implements PlanPreview {
             DensityFunction ground = seeded(level.registryAccess().registryOrThrow(Registries.DENSITY_FUNCTION)
                     .getHolderOrThrow(GROUND_DEPTH).value(), rs);
             this.ground = ground;
+            java.nio.file.Path file = WorldCache.file(level.getServer(), FILE);
+            long fp = WorldCache.fingerprint(level.getServer(), seed);
+            if (load(file, fp)) {
+                ringsDone = half;
+                done.complete(this);
+                LOGGER.info("[world-plan] {} points read from the world in {} ms", n * n, (System.nanoTime() - t0) / 1_000_000L);
+                return;
+            }
             // Rings of 8 at a time: enough work per batch to keep the cores busy, small enough that
             // the loading screen sees the map grow.
             for (int r0 = 0; r0 <= half; r0 += 8) {
@@ -122,6 +132,12 @@ public final class WorldPlan implements PlanPreview {
                 IntStream.of(cells).parallel().forEach(i -> sample(i, ground, bs, sampler));
                 ringsDone = r1;
             }
+            WorldCache.write(file, VERSION, fp, out -> {
+                out.writeInt(n);
+                out.writeInt(sea);
+                for (short h : height) out.writeShort(h);
+                out.write(kind);
+            });
             done.complete(this);
             LOGGER.info("[world-plan] {} points ({} km across) planned in {} ms", n * n,
                     Math.round(n * (double) STEP / 1000.0), (System.nanoTime() - t0) / 1_000_000L);
@@ -129,6 +145,26 @@ public final class WorldPlan implements PlanPreview {
             LOGGER.error("[world-plan] planning failed", e);
             done.completeExceptionally(e);
         }
+    }
+
+    private static final String FILE = "world_plan.dat";
+    /** Bump when what a point holds or how it is sampled changes: older files are planned again. */
+    private static final int VERSION = 1;
+
+    /** Fills the plan from the world's saved copy; false (and nothing filled) when there is none that fits. */
+    private boolean load(java.nio.file.Path file, long fp) {
+        Boolean ok = WorldCache.read(file, VERSION, fp, in -> {
+            if (in.readInt() != n || in.readInt() != sea) return false;
+            short[] h = new short[n * n];
+            byte[] k = new byte[n * n];
+            for (int i = 0; i < h.length; i++) h[i] = in.readShort();
+            in.readFully(k);
+            for (byte b : k) if (b != 1 && b != 2) return false;
+            System.arraycopy(h, 0, height, 0, h.length);
+            System.arraycopy(k, 0, kind, 0, k.length);
+            return true;
+        });
+        return ok != null && ok;
     }
 
     private void sample(int i, DensityFunction ground, BiomeSource bs, Climate.Sampler sampler) {

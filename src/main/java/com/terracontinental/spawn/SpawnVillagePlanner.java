@@ -41,7 +41,9 @@ import java.util.stream.IntStream;
  * never fewer than 9 when the land allows), spread across the whole landmass.
  *
  * <p>Computed once per world, lazily, the first time a spawn-village placement or a suppressed
- * village grid asks about a chunk. Everything is read from the generator: no chunks are built.</p>
+ * village grid asks about a chunk. Everything is read from the generator: no chunks are built.
+ * The plan is kept in the world ({@code data/terra_continental/spawn_villages.dat}); later loads
+ * read it back instead of planning again (up to two minutes of checks).</p>
  * <ol>
  *   <li><b>Land.</b> A 128-block lattice around the origin; a point is land when its biome at sea
  *       level is not an ocean (rivers and lakes stay land, so they don't cut the continent). The spawn
@@ -243,8 +245,21 @@ public final class SpawnVillagePlanner {
             long t = System.nanoTime();
             java.util.Arrays.fill(CHECKS, 0);
             CHECK_NANOS[0] = 0;
+            java.nio.file.Path file = com.terracontinental.plan.WorldCache.file(level.getServer(), FILE);
+            long fp = com.terracontinental.plan.WorldCache.fingerprint(level.getServer(), level.getSeed());
             try {
+                p = load(file, fp, level.getSeed());
+                if (p != null) {
+                    LOGGER.info("[spawn-villages] {} villages read from the world in {} ms",
+                            p.sites.size(), (System.nanoTime() - t) / 1_000_000L);
+                    p.sites.values().forEach(s -> LOGGER.info("[spawn-villages]   {} {} at {}, {} (y {}, relief {})",
+                            s.central() ? "central" : "village", s.type(), s.chunk().getMiddleBlockX(), s.chunk().getMiddleBlockZ(), s.y(), s.relief()));
+                    plan = p;
+                    planFor = key;
+                    return p;
+                }
                 p = compute(level);
+                if (p != null && !p.note.startsWith(" (stopped")) save(file, fp, p);
             } catch (Throwable e) {
                 LOGGER.error("[spawn-villages] planning failed; spawn continent keeps the random village grids", e);
                 p = null;
@@ -264,6 +279,72 @@ public final class SpawnVillagePlanner {
             }
             return p;
         }
+    }
+
+    // -- kept in the world (WorldCache) ---------------------------------------------------------
+
+    private static final String FILE = "spawn_villages.dat";
+    /** Bump when the planner or the plan's fields change: older files are planned again. */
+    private static final int VERSION = 1;
+
+    /** The plan saved in this world, shown on the loading screen as a fresh plan would be; or null. */
+    @Nullable
+    private static Plan load(java.nio.file.Path file, long fp, long seed) {
+        Plan p = com.terracontinental.plan.WorldCache.read(file, VERSION, fp, in -> {
+            int ox = in.readInt(), oz = in.readInt(), n = in.readInt();
+            if (n <= 0 || n > 4097) throw new java.io.IOException("bad size " + n);
+            Plan q = new Plan(seed, ox, oz, n);
+            for (int i = 0; i < n * n; i++) q.land[i] = in.readBoolean();
+            int sites = in.readInt();
+            for (int i = 0; i < sites; i++) {
+                ChunkPos c = new ChunkPos(in.readInt(), in.readInt());
+                Site site = new Site(c, in.readUTF(), in.readBoolean(), in.readInt(), in.readInt());
+                q.sites.put(c.toLong(), site);
+            }
+            q.centroidX = in.readDouble();
+            q.centroidZ = in.readDouble();
+            q.areaKm2 = in.readDouble();
+            q.gapUsed = in.readDouble();
+            q.uncovered = in.readDouble();
+            q.note = in.readUTF();
+            int problems = in.readInt();
+            for (int i = 0; i < problems; i++) q.problems.add(in.readUTF());
+            return q;
+        });
+        if (p == null) return null;
+        com.terracontinental.plan.LoadingStatus.villagePlanStart(p.sites.size());
+        p.sites.values().forEach(s -> com.terracontinental.plan.LoadingStatus.village(
+                s.chunk().getMiddleBlockX(), s.chunk().getMiddleBlockZ()));
+        if (!p.problems.isEmpty()) {
+            com.terracontinental.plan.LoadingStatus.warn("Village placement appears to be non-optimal");
+        }
+        return p;
+    }
+
+    private static void save(java.nio.file.Path file, long fp, Plan p) {
+        com.terracontinental.plan.WorldCache.write(file, VERSION, fp, out -> {
+            out.writeInt(p.originX);
+            out.writeInt(p.originZ);
+            out.writeInt(p.n);
+            for (boolean b : p.land) out.writeBoolean(b);
+            out.writeInt(p.sites.size());
+            for (Site s : p.sites.values()) {
+                out.writeInt(s.chunk().x);
+                out.writeInt(s.chunk().z);
+                out.writeUTF(s.type());
+                out.writeBoolean(s.central());
+                out.writeInt(s.y());
+                out.writeInt(s.relief());
+            }
+            out.writeDouble(p.centroidX);
+            out.writeDouble(p.centroidZ);
+            out.writeDouble(p.areaKm2);
+            out.writeDouble(p.gapUsed);
+            out.writeDouble(p.uncovered);
+            out.writeUTF(p.note);
+            out.writeInt(p.problems.size());
+            for (String s : p.problems) out.writeUTF(s);
+        });
     }
 
     // ------------------------------------------------------------------------------------------

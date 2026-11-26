@@ -36,7 +36,9 @@ import java.util.Comparator;
  * were already done are just loaded and dropped, which is quick.</p>
  *
  * <p>When the chunks are done and Distant Horizons is installed, its own pregen builds the LODs
- * from them (the user's first look should be the whole continent).</p>
+ * from them (the user's first look should be the whole continent), and the job stays in its
+ * {@code lods} phase until DH has built every detail level ({@link DhWork}), so a world copied
+ * when the job says done opens with nothing left to build.</p>
  */
 public final class PregenJob {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -71,6 +73,14 @@ public final class PregenJob {
     private int doneCount;   // done since start of this session (mark included)
     private long sessionStart = System.currentTimeMillis();
     private long lastSave = System.currentTimeMillis(), lastLog = System.currentTimeMillis(), lastNotify;
+    // The LOD phase: when it began this session, DH's finished-task count when it last changed, and when.
+    private long lodsStart, lodsLastCheck, lodsLastChange, lodsCompleted = -1;
+    private boolean lodsStarted;
+
+    /** DH counts as finished once nothing is queued or running and no task has finished for this long. */
+    private static final long LODS_QUIET_MS = 60_000;
+    /** Never earlier than this after starting DH's pregen (its first tasks take a moment to queue). */
+    private static final long LODS_MIN_MS = 120_000;
     private int lastLogDone;
     private double rate; // chunks/s, smoothed
     private int failures;
@@ -172,6 +182,10 @@ public final class PregenJob {
 
     /** Server tick: hand out tickets up to the in-flight limit. */
     public void tick() {
+        if ("lods".equals(state.phase)) {
+            tickLods();
+            return;
+        }
         if (!"chunks".equals(state.phase) || state.paused) return;
         ServerChunkCache cache = level.getChunkSource();
         int startsThisTick = 0;
@@ -262,7 +276,53 @@ public final class PregenJob {
                     .withStyle(ChatFormatting.GREEN));
         } catch (RuntimeException e) {
             LOGGER.warn("[pregen] couldn't start the DH pregen: {}", e.toString());
+            finishLods("couldn't start Distant Horizons' pregen");
+            return;
         }
+        lodsStarted = true;
+        lodsStart = lodsLastChange = lodsLastCheck = System.currentTimeMillis();
+        lodsCompleted = -1;
+    }
+
+    /**
+     * The LOD phase ends when Distant Horizons has gone quiet, not when its pregen command says done:
+     * after that it still builds the coarser detail levels for minutes to hours, and a world copied
+     * or opened before then has LODs filling in and a busy game as it opens (Sinnoh, 2026-11-17).
+     */
+    private void tickLods() {
+        long now = System.currentTimeMillis();
+        if (!lodsStarted) {
+            // Resumed after a restart: DH doesn't resume its pregen, so start it again (it skips
+            // nothing, but chunks it already has are quick).
+            LOGGER.info("[pregen] {}: resuming the LODs", mask.continent.name());
+            startLods();
+            return;
+        }
+        if (now - lodsLastCheck < 5_000) return;
+        lodsLastCheck = now;
+        DhWork.Snapshot w = DhWork.snapshot();
+        if (w == null) {
+            finishLods("Distant Horizons' pregen started; its own status says when it is done");
+            return;
+        }
+        if (w.completed() != lodsCompleted || w.pending() > 0) {
+            lodsCompleted = w.completed();
+            lodsLastChange = now;
+        }
+        if (now - lastLog >= 60_000) {
+            lastLog = now;
+            LOGGER.info("[pregen] {}: lods, Distant Horizons has {} tasks in hand, {} done, running {}",
+                    mask.continent.name(), w.pending(), w.completed(), duration((now - lodsStart) / 1000));
+        }
+        if (now - lodsStart >= LODS_MIN_MS && now - lodsLastChange >= LODS_QUIET_MS) {
+            finishLods("Distant Horizons has finished every detail level in " + duration((now - lodsStart) / 1000));
+        }
+    }
+
+    private void finishLods(String how) {
+        LOGGER.info("[pregen] {}: LODs done: {}", mask.continent.name(), how);
+        notifyOps(Component.literal("[pregen] " + mask.continent.name() + ": done. " + how)
+                .withStyle(ChatFormatting.GREEN));
         state.phase = "done";
         save();
         active = null;

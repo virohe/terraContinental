@@ -26,7 +26,8 @@ import java.util.stream.IntStream;
  * hit every target on 82%, against 5% for 0.13.0's fixed lobes and 18% for a single layout per seed.
  *
  * <p>Everything is drawn from the seeded jitter noise, so a seed always gives the same world. The
- * search runs once per world (cached by seed and settings), on the first continent sample.
+ * search runs once per world, on the first continent sample, and the result is kept in the world
+ * ({@code data/terra_continental/spawn_layout.dat}) so later loads skip it.
  *
  * <p>1:1 with {@code preview/steer_core.py}: SplitMix64 for every draw, sums taken in row-major
  * order one value at a time, stable sorts, 4-connected labelling and an exact Euclidean distance
@@ -99,16 +100,104 @@ public final class SpawnSteer {
         CompletableFuture<Layout> mine = new CompletableFuture<>();
         if (CACHE.size() > 8) CACHE.clear();
         CompletableFuture<Layout> f = CACHE.putIfAbsent(key, mine);
-        if (f != null) return f.join();
+        if (f != null) {
+            Layout l = f.join();
+            save(key, l);
+            return l;
+        }
         try {
-            Layout l = search(upstream, noise, p, baseCenters);
+            Layout l = load(key, noise);
+            if (l == null) l = search(upstream, noise, p, baseCenters);
             mine.complete(l);
+            save(key, l);
             return l;
         } catch (Throwable t) {
             mine.completeExceptionally(t);
             CACHE.remove(key, mine);
             throw t;
         }
+    }
+
+    // -- kept in the world (WorldCache) ---------------------------------------------------------
+
+    private static final String FILE = "spawn_layout.dat";
+    /** Bump when the search or the layout's fields change: older files are searched again. */
+    private static final int VERSION = 1;
+    private static volatile String savedFor;
+
+    /** The layout saved in the running world for this key, or null. */
+    private static Layout load(long key, NoiseHolderRef noise) {
+        net.minecraft.server.MinecraftServer server = com.terracontinental.plan.WorldCache.server();
+        if (server == null) return null;
+        java.nio.file.Path file = com.terracontinental.plan.WorldCache.file(server, FILE);
+        long fp = com.terracontinental.plan.WorldCache.fingerprint(server, key);
+        Layout l = com.terracontinental.plan.WorldCache.read(file, VERSION, fp, in -> {
+            double[][] lobes = readArray(in);
+            double soft = in.readDouble(), warp = in.readDouble(), wavelength = in.readDouble(), core = in.readDouble();
+            double[][] centers = readArray(in);
+            double reach = in.readDouble();
+            int index = in.readInt();
+            double score = in.readDouble(), area = in.readDouble(), roundness = in.readDouble(),
+                    gap = in.readDouble(), others = in.readDouble();
+            int round = in.readInt(), ox = in.readInt(), oz = in.readInt();
+            return new Layout(noise, lobes, soft, warp, wavelength, core, centers, reach, index, score,
+                    area, roundness, gap, others, round, ox, oz);
+        });
+        if (l != null) {
+            savedFor = file + "#" + fp;
+            LOGGER.info("[spawn-steer] read from the world: round {} layout {}, {} km2", l.round(), l.index(), Math.round(l.area()));
+        }
+        return l;
+    }
+
+    /** Keeps the layout in the running world, once a session (every chunk worker may get here at once). */
+    private static synchronized void save(long key, Layout l) {
+        net.minecraft.server.MinecraftServer server = com.terracontinental.plan.WorldCache.server();
+        if (server == null) return;
+        java.nio.file.Path file = com.terracontinental.plan.WorldCache.file(server, FILE);
+        long fp = com.terracontinental.plan.WorldCache.fingerprint(server, key);
+        String id = file + "#" + fp;
+        if (id.equals(savedFor)) return;
+        savedFor = id;
+        com.terracontinental.plan.WorldCache.write(file, VERSION, fp, out -> {
+            writeArray(out, l.lobes());
+            out.writeDouble(l.soft());
+            out.writeDouble(l.warp());
+            out.writeDouble(l.wavelength());
+            out.writeDouble(l.core());
+            writeArray(out, l.centers());
+            out.writeDouble(l.reach());
+            out.writeInt(l.index());
+            out.writeDouble(l.score());
+            out.writeDouble(l.area());
+            out.writeDouble(l.roundness());
+            out.writeDouble(l.gap());
+            out.writeDouble(l.others());
+            out.writeInt(l.round());
+            out.writeInt(l.ox());
+            out.writeInt(l.oz());
+        });
+    }
+
+    private static void writeArray(java.io.DataOutputStream out, double[][] a) throws java.io.IOException {
+        out.writeInt(a.length);
+        for (double[] row : a) {
+            out.writeInt(row.length);
+            for (double v : row) out.writeDouble(v);
+        }
+    }
+
+    private static double[][] readArray(java.io.DataInputStream in) throws java.io.IOException {
+        int n = in.readInt();
+        if (n < 0 || n > 4096) throw new java.io.IOException("bad length " + n);
+        double[][] a = new double[n][];
+        for (int i = 0; i < n; i++) {
+            int m = in.readInt();
+            if (m < 0 || m > 16) throw new java.io.IOException("bad length " + m);
+            a[i] = new double[m];
+            for (int j = 0; j < m; j++) a[i][j] = in.readDouble();
+        }
+        return a;
     }
 
     // -- the search ---------------------------------------------------------------------------

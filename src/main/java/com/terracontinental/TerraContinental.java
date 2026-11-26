@@ -136,8 +136,10 @@ public class TerraContinental {
         NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.ContinentsCommand::onServerTick);
         NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.ContinentsCommand::onServerStarted);
         NeoForge.EVENT_BUS.addListener(com.terracontinental.commands.ContinentsCommand::onServerStopping);
-        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerAboutToStartEvent e) ->
-                com.terracontinental.worldtype.WorldTypeCheck.run(e.getServer()));
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerAboutToStartEvent e) -> {
+            com.terracontinental.plan.WorldCache.forgetInstall();
+            com.terracontinental.worldtype.WorldTypeCheck.run(e.getServer());
+        });
         // Start the world plan as the overworld loads, before the spawn area generates: the loading
         // screen draws it, and the village planner reads its land from it.
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.level.LevelEvent.Load e) -> {
@@ -148,8 +150,8 @@ public class TerraContinental {
                 com.terracontinental.structure.DryStarts.load(sl);
             }
         });
-        // Plan the spawn villages off-thread as soon as the server is up. The plan isn't saved, so
-        // without this the first new chunk after a restart waits ~15 s for it.
+        // Plan the spawn villages off-thread as soon as the server is up (or read the plan kept in the
+        // world), so the first new chunk doesn't wait for it.
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStartedEvent e) ->
                 java.util.concurrent.CompletableFuture.runAsync(() -> com.terracontinental.spawn.SpawnVillagePlanner.get(e.getServer().overworld())));
     }
