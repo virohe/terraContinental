@@ -5,6 +5,24 @@ reconstructed on 2026-09-27; everything from
 0.0.1 to 0.7.3 landed in one catch-up commit (`15597b7`) because it had not been committed as
 it happened. Earlier history is in `git log`.
 
+## 0.14.3 — 2026-11-27
+
+- **Terrain sampling is about 13 times faster.** Every `NoiseChunk` (one per `getBaseHeight` call and one per
+  generated chunk) maps the whole noise router and keys a hash map on each new node. A density function's
+  hash walked its whole subtree down to the noises, which C2ME hashes over their permutation arrays, so the
+  deep terrain tree was re-hashed once for every ancestor. On the real-pack rig (seed 1742398067288660832)
+  92% of the time spent sampling terrain was in `hashCode`, mostly in vanilla's own `DensityFunctions`
+  records; Terra Continental's `clamp_between` (a record) was one link in that chain. Now
+  `DensityHashCacheMixin` keeps the hash of vanilla's immutable density-function, spline and noise-holder
+  records after the first call, and `clamp_between`, `at_y` and `invert` work theirs out once when built.
+  Equality and the hash values are unchanged, so NoiseChunk's cache sharing and C2ME's compiled-function
+  cache behave as before, and so does the terrain: 220 columns sampled before and after gave the same heights.
+  `getBaseHeight` went from 136.7 ms to 10.6 ms a call (mean of 200; median 131 to 10.2 ms).
+  On a fresh realgen world the spawn-village plan took 8.7 s instead of 83.2 s, the hamlet site search
+  6.7 s instead of 38.1 s, the server was up in 33 s instead of 155 s, and the whole audit run took about
+  8.5 minutes instead of about 90 (its terrain audit 2 minutes instead of 53). The same 10 villages and 8
+  hamlet sites were planned; the audit is green, with every quality count unchanged.
+
 ## 0.14.2 — 2026-11-26
 
 - **Worlds open ready** (user, 2026-11-26: "I really want the world to load up right away when a player

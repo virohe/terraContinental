@@ -11,12 +11,35 @@ import net.minecraft.world.level.levelgen.DensityFunction;
  * terra_continental:at_y. The biome router reads terrain height as 128 x depth at y 0 (the world
  * plan's estimate), so biomes can follow altitude: peak biomes only above the snow line.
  */
-public record AtYFunction(DensityFunction argument, int y) implements DensityFunction {
+public final class AtYFunction implements DensityFunction {
 
     public static final MapCodec<AtYFunction> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
             DensityFunction.HOLDER_HELPER_CODEC.fieldOf("argument").forGetter(AtYFunction::argument),
             Codec.INT.optionalFieldOf("y", 0).forGetter(AtYFunction::y)
     ).apply(i, AtYFunction::new));
+
+    private final DensityFunction argument;
+    private final int y;
+    // Hashed once: NoiseChunk keys a map on every node it wraps (see DensityHashCacheMixin).
+    private final int hash;
+
+    public AtYFunction(DensityFunction argument, int y) {
+        this.argument = argument;
+        this.y = y;
+        this.hash = 31 * argument.hashCode() + y;
+    }
+
+    public DensityFunction argument() { return argument; }
+
+    public int y() { return y; }
+
+    @Override
+    public boolean equals(Object o) {
+        return this == o || o instanceof AtYFunction a && hash == a.hash && y == a.y && argument.equals(a.argument);
+    }
+
+    @Override
+    public int hashCode() { return hash; }
 
     @Override
     public double compute(FunctionContext context) {

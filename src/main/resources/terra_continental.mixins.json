@@ -19,6 +19,7 @@
     "terrain.CaveBiomeContainmentMixin",
     "terrain.MonumentDepthMixin",
     "terrain.OffsetListMixin",
+    "terrain.DensityHashCacheMixin",
     "MinecraftServerAccessor",
     "ServerChunkCacheInvoker",
     "VillageCarverMixins",
