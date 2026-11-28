@@ -1,9 +1,9 @@
 {
- "_comment": "LUSH CAVES IN POCKETS. Underground biomes take their box only where the climate lies inside it (CaveBiomeContainmentMixin), so humidity decides where lush_caves (>= 0.7) can appear. Two underground-only terms, both blended in by depth (terra_continental:depth: 0 at depth 0.1, full by 0.3; underground biomes live at depth 0.2-0.9), so surface biome selection is untouched. 1) CAP (the inner add): the spline is the identity below 0.4 and flattens to 0.6 above it, so caves under humid land stay below lush's box and keep the biome their climate picks at the surface. 2) POCKETS (the outer add): terra_continental:cave_pocket_lush, a 3-D noise with features of several hundred blocks, pulls humidity toward 0.85 where it passes 0.3 (full by 0.55): lush caves come in pockets about 600 m across, about 1 km apart, under dry and humid land alike. Where a lush pocket overlaps a dripstone pocket, the two tie and dripstone wins. argument1 and the copy inside argument2 both hold the capped humidity (written out twice: density functions have no let).",
+ "_comment": "LUSH CAVES IN POCKETS. Underground biomes take their box only where the climate lies inside it (CaveBiomeContainmentMixin), so humidity decides where lush_caves (>= 0.7) can appear. Two underground-only terms, both blended in by depth (terra_continental:depth: 0 at depth 0.1, full by 0.3; underground biomes live at depth 0.2-0.9), so surface biome selection is untouched. 1) CAP (the inner add): the spline is the identity below 0.4 and flattens to 0.6 above it, so caves under humid land stay below lush's box and keep the biome their climate picks at the surface. 2) POCKETS (the outer add): terra_continental:cave_pocket_lush, a 3-D noise with features of several hundred blocks, pulls humidity toward 0.85 where it passes 0.3 (full by 0.55): lush caves come in pockets about 600 m across, about 1 km apart, under dry and humid land alike. Where a lush pocket overlaps a dripstone pocket, the two tie and dripstone wins. argument1 and the copy inside argument2 both hold the capped humidity (written out twice: density functions have no let). The humidity these terms start from is terra_continental:shape/vegetation_rivers: vanilla's vegetation, pushed apart on either side of the big rivers, so on wide flats a river is where the biome changes (prairie to forest).",
  "type": "minecraft:add",
  "argument1": {
   "type": "minecraft:add",
-  "argument1": "minecraft:overworld/vegetation",
+  "argument1": "terra_continental:shape/vegetation_rivers",
   "argument2": {
    "type": "minecraft:mul",
    "argument1": {
@@ -25,7 +25,7 @@
     "argument1": {
      "type": "minecraft:spline",
      "spline": {
-      "coordinate": "minecraft:overworld/vegetation",
+      "coordinate": "terra_continental:shape/vegetation_rivers",
       "points": [
        {
         "location": -1.0,
@@ -53,7 +53,7 @@
     "argument2": {
      "type": "minecraft:mul",
      "argument1": -1.0,
-     "argument2": "minecraft:overworld/vegetation"
+     "argument2": "terra_continental:shape/vegetation_rivers"
     }
    }
   }
@@ -103,7 +103,7 @@
      "argument1": -1.0,
      "argument2": {
       "type": "minecraft:add",
-      "argument1": "minecraft:overworld/vegetation",
+      "argument1": "terra_continental:shape/vegetation_rivers",
       "argument2": {
        "type": "minecraft:mul",
        "argument1": {
@@ -125,7 +125,7 @@
         "argument1": {
          "type": "minecraft:spline",
          "spline": {
-          "coordinate": "minecraft:overworld/vegetation",
+          "coordinate": "terra_continental:shape/vegetation_rivers",
           "points": [
            {
             "location": -1.0,
@@ -153,7 +153,7 @@
         "argument2": {
          "type": "minecraft:mul",
          "argument1": -1.0,
-         "argument2": "minecraft:overworld/vegetation"
+         "argument2": "terra_continental:shape/vegetation_rivers"
         }
        }
       }

@@ -254,7 +254,29 @@ DEFAULTS = {"warp": None, "linear_density": None,
             "giant_summit": 0.35, "giant_summit_width": 0.3333, "giant_summit_power": 1.5,
             "giant_companions": 0, "giant_companion_height": 0.85, "giant_companion_width": 0.12,
             "giant_companion_dist": 0.22, "giant_variety": 0.0,
-            "rivers": None, "range_scale": None, "range_width": 0.12, "range_massif": None}
+            "rivers": None, "range_scale": None, "range_width": 0.12, "range_massif": None,
+            "coast_warp": None, "coast_rugged": 0.0, "coast_rugged_scale": 0.25,
+            "river_scale": None, "river_width": 1.5, "river_bed": -0.06,
+            "river_seam": 0.0, "river_seam_width": 0.15,
+            "giant_mode": None, "giant_place": "terra_continental:shape/offset_dry", "giant_gain": 1.0,
+            "giant_gain_radius": 6000.0, "giant_gain_power": 2.0, "giant_gain_floor": 0.15,
+            "giant_crest": 0.0, "giant_target": None, "giant_rise": None, "giant_target_cap": 1.72,
+            "giant_place_ring": 0.0, "giant_place_reach": 0.6, "giant_soft_cap": False,
+            "giant_sister_lift": 0.0, "giant_sister_drop": 0.15, "giant_sister_band": 0.35,
+            "giant_level_floor": None, "giant_level_q": None, "giant_solve": None, "giant_sister_crest": 0.0, "giant_raise_ridge": 0.0, "giant_raise_length": 9000.0, "giant_raise_width": 0.0, "giant_horn": 0.0, "giant_horn_radius": 900.0,
+            "giant_horn_power": 1.3, "giant_mask_radius": None, "giant_sisters": 0.0, "giant_sisters_scale": 1.2,
+            "giant_sisters_clear": 450.0, "giant_notch": 0.0, "giant_notch_scale": 1.5, "giant_crest_width": 0.12, "giant_crest_power": 1.5, "giant_crest_gain_power": 1.5,
+            "range_jag": 0.0, "range_jag_share": 0.15, "range_jag_scale": 0.5}
+
+RIVER_R = "terra_continental:shape/river_ridges"
+RIVER_CHANNEL = "terra_continental:shape/river_channel"
+RIVER_W = "terra_continental:shape/ridges_rivers"
+VEGETATION = "minecraft:overworld/vegetation"
+ROUTER_VEG = "minecraft:overworld/noise_router/vegetation"
+RIVER_VEG = "terra_continental:shape/vegetation_rivers"
+
+CONTINENT_BASE = "terra_continental:continent_base"
+COAST_RUGGED = "terra_continental:shape/coast_rugged"
 
 RANGE_E = "terra_continental:shape/range_erosion"
 GIANT = "terra_continental:giant_peaks"
@@ -327,6 +349,283 @@ def giant_node(p, **extra):
                   "companion_width": p["giant_companion_width"], "companion_dist": p["giant_companion_dist"]})
     n.update(extra)
     return n
+
+
+OFFSET_RANGE = "terra_continental:shape/offset_range"
+
+
+def strip_cap(node):
+    """The offset without the giant's cap: add(max(0, c - giant), knee(x - max(...))) -> x."""
+    if isinstance(node, dict):
+        a1, a2 = node.get("argument1"), node.get("argument2")
+        if (node.get("type") == "minecraft:add" and isinstance(a1, dict) and a1.get("type") == "minecraft:max"
+                and GIANT in json.dumps(a1) and isinstance(a2, dict) and a2.get("type") == "minecraft:spline"):
+            coord = a2["spline"]["coordinate"]
+            return strip_cap(coord["argument1"])
+        return {k: strip_cap(v) for k, v in node.items()}
+    if isinstance(node, list):
+        return [strip_cap(v) for v in node]
+    return node
+
+
+def range_place(p):
+    """Where the giant stands: the highest of the giant-free offset plus a bonus on the range's
+    centre line (|folded erosion| under 0.05), so the summit and the crest meet."""
+    place = p["giant_place"]
+    if p["giant_crest"]:
+        place = {"type": "minecraft:add", "argument1": place, "argument2": linear_spline(
+            {"type": "minecraft:abs", "argument": "terra_continental:shape/erosion_folded"},
+            [(0.0, 0.3), (0.05, 0.0)], flat_ends=True)}
+    out = {"place": place}
+    if p["giant_place_ring"]:
+        # Scored by the range around each candidate, over the whole continent (8-seed review).
+        out.update({"range": p["giant_place"], "place_reach": p["giant_place_reach"],
+                    "place_ring": p["giant_place_ring"],
+                    "crest_line": {"type": "minecraft:abs", "argument": "terra_continental:shape/erosion_folded"},
+                    "crest_max": 0.08})
+        if p["giant_level_floor"] is not None:
+            out["level_floor"] = p["giant_level_floor"]
+        if p["giant_level_q"] is not None:
+            out["level_q"] = p["giant_level_q"]
+        if p["giant_solve"] is not None:
+            # Each giant's target and sister drop solved against the real terrain for this
+            # prominence in blocks (GiantPeaksFunction.solve; nine hand-tuned screens stalled at
+            # 4 of 8 seeds, 2026-11-28).
+            out["solve"] = {"prom": p["giant_solve"], "rise": p["giant_rise"], "cap": p["giant_target_cap"]}
+    return out
+
+
+def retarget_giant(node, p):
+    """Every giant node (biome pull, crags) placed on its range like the new giant."""
+    if isinstance(node, dict):
+        if node.get("type") == GIANT:
+            n = dict(node)
+            n.update(range_place(p))
+            if n.get("output") == "mask":
+                # Crags and the peak-biome pull reach out over the companions, not only the
+                # summit cone (at the cone's 900, crags stopped ~270 blocks out).
+                n["radius"] = p["giant_mask_radius"] or p["giant_radius"]
+            return n
+        return {k: retarget_giant(v, p) for k, v in node.items()}
+    if isinstance(node, list):
+        return [retarget_giant(v, p) for v in node]
+    return node
+
+
+def giant_range(offset, p, out):
+    """The giant as part of its range (the user, 2026-11-27: the dome stood alone and read as a
+    lone breast-shaped hill). It stands on the highest ground of its continent's core and lifts
+    the range's own relief there: offset + gain * giant_gain * max(0, offset - giant_gain_floor),
+    so ridges climb toward the summit while valleys and lowland stay; a narrow sharp cone on top
+    (giant_height) makes one point clearly the tallest."""
+    base = strip_cap(strip_giant(offset))
+    if p["giant_level_floor"] is not None and p["giant_raise_width"]:
+        # The raised range's body (the user chose a raised range over a modest giant,
+        # 2026-11-28): where the continent's best range sits below giant_level_floor, a broad
+        # band along the range line (|E| up to giant_raise_width) is lifted by the shortfall,
+        # fading out over the climb's radius; the crest then climbs from it to the summit.
+        # With the crest alone the raised "range" was one knife ridge on a plain (v6 screen).
+        deficit = giant_node(p, output="deficit", gain_radius=p["giant_gain_radius"], **range_place(p))
+        fade = giant_node(p, output="gain", gain_radius=p["giant_gain_radius"], gain_power=1.0, **range_place(p))
+        cp = dict(p, crest_height=1.0, crest_width=p["giant_raise_width"], crest_power=1.0)
+        body = {"type": "minecraft:mul", "argument1": deficit, "argument2": {
+            "type": "minecraft:mul", "argument1": fade, "argument2": crest(None, cp)}}
+        if p["giant_raise_ridge"]:
+            # A ridge of its own through the summit instead (GiantPeaksFunction "raise"): the
+            # band along the erosion line gave one tower with sheer seams (v10 views).
+            body = giant_node(p, output="raise", raise_width=p["giant_raise_ridge"],
+                              raise_length=p["giant_raise_length"], gain_radius=p["giant_gain_radius"],
+                              **range_place(p))
+        base = {"type": "minecraft:add", "argument1": base, "argument2": body}
+    out[OFFSET_RANGE] = {"type": "minecraft:flat_cache", "argument": base}
+    gain = giant_node(p, output="gain", gain_radius=p["giant_gain_radius"], gain_power=p["giant_gain_power"],
+                      **range_place(p))
+    excess = {"type": "minecraft:max", "argument1": 0.0,
+              "argument2": {"type": "minecraft:add", "argument1": OFFSET_RANGE, "argument2": -p["giant_gain_floor"]}}
+    lift = {"type": "minecraft:mul", "argument1": p["giant_gain"],
+            "argument2": {"type": "minecraft:mul", "argument1": gain, "argument2": excess}}
+    cone = giant_node(p, summit=1.0, summit_width=1.0, summit_power=p["giant_summit_power"], **range_place(p))
+    total = {"type": "minecraft:add", "argument1": OFFSET_RANGE, "argument2": lift}
+    climb_from = OFFSET_RANGE
+    if p["giant_rise"] is not None:
+        # The crest climbs from the lifted ground, not the bare range: measured from the bare
+        # range, the shoulders' lift was added on top at the summit too, and the summit
+        # overshot its target by 0.1-0.3 by seed (v7 debug, 902114477: target 1.48, summit 1.75).
+        out[OFFSET_LIFTED] = {"type": "minecraft:flat_cache", "argument": total}
+        total = OFFSET_LIFTED
+        climb_from = OFFSET_LIFTED
+    if p["giant_crest"]:
+        # A knife-edged spine along the range's centre line (folded erosion's zero-line), rising
+        # toward the summit: multiplying all of the range's relief (g1) lifted whole shoulders
+        # into a broad snowfield; the crest lifts only the ridge.
+        out["terra_continental:shape/crest_e"] = {"type": "minecraft:flat_cache", "argument": {
+            "type": "minecraft:abs", "argument": "terra_continental:shape/erosion_folded"}}
+        cp = dict(p, crest_height=1.0, crest_width=p["giant_crest_width"], crest_power=p["giant_crest_power"])
+        amount = p["giant_crest"]
+        if p["giant_rise"] is not None:
+            # The summit as a rise over the crest of its own range, capped below the ceiling
+            # (the user's 8-seed review, 2026-11-27: one fixed height made giants too prominent
+            # on low ranges, 470-740 blocks over them, and pressed the ceiling on high ones; the
+            # ones that passed stood 270-330 over).
+            tgt = giant_node(p, output="target", rise=p["giant_rise"], target_cap=p["giant_target_cap"],
+                             gain_radius=p["giant_gain_radius"], **range_place(p))
+            amount = {"type": "minecraft:mul", "argument1": p["giant_crest"], "argument2": {
+                "type": "minecraft:max", "argument1": 0.0, "argument2": {
+                    "type": "minecraft:add", "argument1": tgt,
+                    "argument2": {"type": "minecraft:mul", "argument1": -1.0, "argument2": climb_from}}}}
+        elif p["giant_target"] is not None:
+            # Pulled toward a set summit height instead of a set lift: the range under the giant
+            # differs from seed to seed (offset 1.06 on the Sinnoh seed), and fixed additions ran
+            # it into the world ceiling (g3, 648 cells cut flat). On the crest line the ridge
+            # climbs from its own height to giant_target at the summit, one point on every seed.
+            amount = {"type": "minecraft:mul", "argument1": p["giant_crest"], "argument2": {
+                "type": "minecraft:max", "argument1": 0.0, "argument2": {
+                    "type": "minecraft:add", "argument1": p["giant_target"],
+                    "argument2": {"type": "minecraft:mul", "argument1": -1.0, "argument2": OFFSET_RANGE}}}}
+        climb = giant_node(p, output="gain", gain_radius=p["giant_gain_radius"],
+                           gain_power=p["giant_crest_gain_power"], **range_place(p))
+        if p["giant_horn"]:
+            # The last share of the climb in a narrow horn: with the wide ramp alone the top was
+            # near full height for hundreds of blocks, a plateau (g4, 490 cells within 3 blocks).
+            horn = giant_node(p, output="gain", gain_radius=p["giant_horn_radius"],
+                              gain_power=p["giant_horn_power"], **range_place(p))
+            climb = {"type": "minecraft:add",
+                     "argument1": {"type": "minecraft:mul", "argument1": 1.0 - p["giant_horn"], "argument2": climb},
+                     "argument2": {"type": "minecraft:mul", "argument1": p["giant_horn"], "argument2": horn}}
+        if p["giant_sisters"]:
+            # Sister peaks on the range (the user, 2026-11-27: "sisters on a range, not distant
+            # cousins", like the Tetons or the Dolomites): the crest's climb is broken by a peaked
+            # noise ~800 blocks across into sharp tops with cols between, giant_sisters deep.
+            # The crest only exists on the range's centre line, so the sisters stand on the
+            # ridge, lower the further they are from the giant; the summit keeps the full climb
+            # within giant_sisters_clear of it, so it stays the tallest.
+            peaks = linear_spline({"type": "minecraft:shifted_noise", "noise": "terra_continental:tectonic",
+                                   "xz_scale": p["giant_sisters_scale"], "y_scale": 1.0, "shift_x": 0.0,
+                                   "shift_y": 6421.0, "shift_z": 0.0},
+                                  [(-0.1, 0.0), (0.2, 0.35), (0.45, 1.0)], flat_ends=True)
+            near = giant_node(p, output="gain", gain_radius=p["giant_sisters_clear"], gain_power=1.0,
+                              **range_place(p))
+            dip = {"type": "minecraft:mul", "argument1": -p["giant_sisters"], "argument2": {
+                "type": "minecraft:mul",
+                "argument1": {"type": "minecraft:add", "argument1": 1.0,
+                              "argument2": {"type": "minecraft:mul", "argument1": -1.0, "argument2": peaks}},
+                "argument2": {"type": "minecraft:add", "argument1": 1.0,
+                              "argument2": {"type": "minecraft:mul", "argument1": -1.0, "argument2": near}}}}
+            amount = {"type": "minecraft:mul", "argument1": amount,
+                      "argument2": {"type": "minecraft:add", "argument1": 1.0, "argument2": dip}}
+        if p["giant_notch"]:
+            # Cols and lesser summits along the crest: with an even pull the ridge either side of
+            # the summit read as one long snow wall (the user's review, 2026-11-27). A noise ~1 km
+            # across takes up to giant_notch of the crest away, faded out toward the summit by
+            # the horn, so the main peak stays the tallest.
+            notch = linear_spline({"type": "minecraft:shifted_noise", "noise": "terra_continental:tectonic",
+                                   "xz_scale": p["giant_notch_scale"], "y_scale": 1.0, "shift_x": 0.0,
+                                   "shift_y": 5303.0, "shift_z": 0.0},
+                                  [(-0.5, 0.0), (0.5, 1.0)], flat_ends=True)
+            near = giant_node(p, output="gain", gain_radius=p["giant_horn_radius"] * 1.5, gain_power=1.0,
+                              **range_place(p))
+            keep = {"type": "minecraft:add", "argument1": 1.0, "argument2": {
+                "type": "minecraft:mul", "argument1": -p["giant_notch"], "argument2": {
+                    "type": "minecraft:mul", "argument1": notch, "argument2": {
+                        "type": "minecraft:add", "argument1": 1.0,
+                        "argument2": {"type": "minecraft:mul", "argument1": -1.0, "argument2": near}}}}}
+            amount = {"type": "minecraft:mul", "argument1": amount, "argument2": keep}
+        spine = {"type": "minecraft:mul", "argument1": amount, "argument2": {
+            "type": "minecraft:mul", "argument1": climb, "argument2": crest(None, cp)}}
+        total = {"type": "minecraft:add", "argument1": total, "argument2": spine}
+    if p["giant_sister_lift"] and p["giant_rise"] is not None:
+        # The range's own high points 0.6-3 km out pulled up toward giant_sister_drop below the
+        # summit (the user, 2026-11-28, on the failures: on a narrow range only the giant's crest
+        # rose, so it stood proud and alone). Weighted by how high each point already stands
+        # against the range's crest (full at the crest, none giant_sister_band below), so valleys
+        # and low ground stay; the summit itself is outside the ring. The neighbours rising cuts
+        # the giant's prominence and gives it sisters at the same time.
+        out[OFFSET_GIANT_PRE] = {"type": "minecraft:flat_cache", "argument": total}
+        tgt = giant_node(p, output="target", rise=p["giant_rise"], target_cap=p["giant_target_cap"],
+                         gain_radius=p["giant_gain_radius"], **range_place(p))
+        level = giant_node(p, output="level", gain_radius=p["giant_gain_radius"], **range_place(p))
+        ring = giant_node(p, output="ring", **range_place(p))
+        band = p["giant_sister_band"]
+        drop = -p["giant_sister_drop"]
+        if p["giant_solve"] is not None:
+            drop = {"type": "minecraft:mul", "argument1": -1.0,
+                    "argument2": giant_node(p, output="drop", gain_radius=p["giant_gain_radius"], **range_place(p))}
+        high = linear_spline({"type": "minecraft:add", "argument1": OFFSET_RANGE,
+                              "argument2": {"type": "minecraft:mul", "argument1": -1.0, "argument2": level}},
+                             [(-band, 0.0), (0.0, 1.0)], flat_ends=True)
+        if p["giant_sister_crest"]:
+            # Weighted by being on a range line (|folded erosion| within giant_sister_crest) or
+            # on the raised range, which vary smoothly over the land: weighted by each point's own
+            # height, a hill's top rose fully and its flanks barely, and its sides became rings of
+            # cliffs (v16, 4151832666630476678 north-east).
+            cp = dict(p, crest_height=1.0, crest_width=p["giant_sister_crest"], crest_power=1.0)
+            high = crest(None, cp)
+            if p["giant_raise_ridge"]:
+                high = {"type": "minecraft:max", "argument1": high, "argument2": giant_node(
+                    p, output="raise_shape", raise_width=p["giant_raise_ridge"],
+                    raise_length=p["giant_raise_length"], gain_radius=p["giant_gain_radius"], **range_place(p))}
+        room = {"type": "minecraft:max", "argument1": 0.0, "argument2": {
+            "type": "minecraft:add", "argument1": tgt, "argument2": {
+                "type": "minecraft:add", "argument1": drop,
+                "argument2": {"type": "minecraft:mul", "argument1": -1.0, "argument2": OFFSET_GIANT_PRE}}}}
+        if p["giant_solve"] is not None:
+            # One amount for the whole ring, tgt - drop - level, signed: the ring's crest moves to
+            # tgt - drop and every high point with it, so the range keeps its relief (pulling each
+            # point toward tgt - drop flattened knobs into snow mesas, v15 views), and the solver
+            # can press a ring that stands too close under a capped summit down as well as lift a
+            # proud giant's sisters; off where the solver left the ring alone.
+            shift = {"type": "minecraft:add", "argument1": tgt, "argument2": {
+                "type": "minecraft:add", "argument1": drop,
+                "argument2": {"type": "minecraft:mul", "argument1": -1.0, "argument2": level}}}
+            room = {"type": "minecraft:mul", "argument1": shift,
+                    "argument2": giant_node(p, output="sisters", gain_radius=p["giant_gain_radius"],
+                                            **range_place(p))}
+        lift_s = {"type": "minecraft:mul", "argument1": p["giant_sister_lift"], "argument2": {
+            "type": "minecraft:mul", "argument1": ring, "argument2": {
+                "type": "minecraft:mul", "argument1": high, "argument2": room}}}
+        total = {"type": "minecraft:add", "argument1": OFFSET_GIANT_PRE, "argument2": lift_s}
+    if p["giant_companions"] and p["giant_target"] is not None:
+        # Lesser summits close round the giant (the user, 2026-11-27): each pulls the ground
+        # there a share of the way up to giant_target, measured from the ground already raised,
+        # so a companion on the crest can't outgrow the main summit, which keeps its cone on top.
+        out[OFFSET_GIANT_PRE] = {"type": "minecraft:flat_cache", "argument": total}
+        room = {"type": "minecraft:max", "argument1": 0.0, "argument2": {
+            "type": "minecraft:add", "argument1": p["giant_target"],
+            "argument2": {"type": "minecraft:mul", "argument1": -1.0, "argument2": OFFSET_GIANT_PRE}}}
+        comps = giant_node(p, output="companions", **range_place(p))
+        total = {"type": "minecraft:add", "argument1": OFFSET_GIANT_PRE,
+                 "argument2": {"type": "minecraft:mul", "argument1": room, "argument2": comps}}
+    if p["giant_rise"] is not None and p["giant_soft_cap"]:
+        # Soft cap at the summit's target: the shoulders' lift and the range itself carried high
+        # ranges to the world ceiling whatever the crest did (v2 screen, 8675309 at +1,193).
+        # Identity well below, bending to at most +0.1 above, so capped ground keeps its shape;
+        # only the summit's own tip (the cone) stands above.
+        out[OFFSET_GIANT_CAP] = {"type": "minecraft:flat_cache", "argument": total}
+        tgt = giant_node(p, output="target", rise=p["giant_rise"], target_cap=p["giant_target_cap"],
+                         gain_radius=p["giant_gain_radius"], **range_place(p))
+        diff = {"type": "minecraft:add", "argument1": OFFSET_GIANT_CAP,
+                "argument2": {"type": "minecraft:mul", "argument1": -1.0, "argument2": tgt}}
+        knee = {"type": "minecraft:spline", "spline": {"coordinate": diff, "points": [
+            {"location": -2.0, "value": -2.0, "derivative": 1.0},
+            {"location": -0.3, "value": -0.3, "derivative": 1.0},
+            {"location": 0.0, "value": -0.03, "derivative": 0.4},
+            {"location": 0.3, "value": 0.07, "derivative": 0.15},
+            {"location": 1.0, "value": 0.1, "derivative": 0.0}]}}
+        total = {"type": "minecraft:add", "argument1": tgt, "argument2": knee}
+    return {"type": "minecraft:add", "argument1": total, "argument2": cone}
+
+
+OFFSET_GIANT_CAP = "terra_continental:shape/offset_giant_cap"
+OFFSET_LIFTED = "terra_continental:shape/offset_giant_lifted"
+OFFSET_GIANT_PRE = "terra_continental:shape/offset_giant_pre"
+
+
+def mask_threshold(share):
+    """The value of terra_continental:tectonic (as a 2-D patch mask) that `share` of the world
+    lies above. Its values are near-normal with sd ~0.29, not spread over +-1: thresholds of
+    1 - 2 * share never fired at all (measured on three seeds, 2026-11-27)."""
+    from statistics import NormalDist
+    return 0.29 * NormalDist().inv_cdf(1.0 - share)
 
 
 def lerp_to(value, target, weight):
@@ -507,6 +806,12 @@ def build(reg, params):
             out[ROUTER_RIDGES] = lerp_to(inner, target, weight)
     if p["crest_height"] is not None:
         offset = {"type": "minecraft:add", "argument1": offset, "argument2": crest(reg, p)}
+    if p["giant_mode"] == "range":
+        offset = giant_range(offset, p, out)
+        for name in (ROUTER_RIDGES, TERRAIN[2]):
+            out[name] = retarget_giant(copy.deepcopy(out.get(name) or src.get(name) or reg.df(name)), p)
+            if name in src:
+                src[name] = out[name]
     src[TERRAIN[0]] = {"type": "minecraft:flat_cache", "argument": {"type": "minecraft:cache_2d", "argument": offset}}
     jag = unwrap(src[TERRAIN[2]])
     factors = []
@@ -516,6 +821,24 @@ def build(reg, params):
         # No needles on valley floors; full texture again at the top of the wall.
         factors.append(linear_spline(R, [(0.0, 0.0), (p["valley_width"], 0.0),
                                          (p["valley_width"] + p["valley_wall"], 1.0), (2.0, 1.0)]))
+    if p["range_jag"]:
+        # Rare jagged stretches: the base needle texture times 1 + range_jag inside patches a few
+        # km across covering about range_jag_share of the land, so some lesser ranges turn
+        # craggy (the user, 2026-11-27: "a little more rare, but enough to add some intrigue").
+        t = mask_threshold(p["range_jag_share"])
+        mask = linear_spline({"type": "minecraft:shifted_noise", "noise": "terra_continental:tectonic",
+                              "xz_scale": p["range_jag_scale"], "y_scale": 1.0, "shift_x": 0.0,
+                              "shift_y": 9341.0, "shift_z": 0.0},
+                             [(t - 0.08, 0.0), (t + 0.08, 1.0)], flat_ends=True)
+        if p["giant_mode"] == "range":
+            # Not on the giant: its crags already sharpen it, and the two stacked carried
+            # summits ~300 blocks past their shape, into the ceiling (v3 screen, 8675309).
+            away = {"type": "minecraft:add", "argument1": 1.0, "argument2": {
+                "type": "minecraft:mul", "argument1": -1.0,
+                "argument2": giant_node(p, output="mask", mask_reach=2.0, **range_place(p))}}
+            mask = {"type": "minecraft:mul", "argument1": mask, "argument2": away}
+        factors.append({"type": "minecraft:add", "argument1": 1.0,
+                        "argument2": {"type": "minecraft:mul", "argument1": p["range_jag"], "argument2": mask}})
     for f in factors:
         jag = {"type": "minecraft:mul", "argument1": jag, "argument2": f}
     if p["giant_height"] is not None and p["giant_crags"]:
@@ -546,6 +869,81 @@ def build(reg, params):
                     raise SystemExit(f"{name} {axis} is {body.get(axis)!r}, not the plain shift")
                 body[axis] = {"type": "minecraft:mul", "argument1": p["warp"], "argument2": "minecraft:" + axis}
             out[name] = body
+    if p["river_scale"] is not None:
+        # Fewer, bigger rivers. The base terrain's rivers run along every zero-line of the folded
+        # ridge noise (xz 0.25): a channel every ~500 blocks, which on this terrain's broad,
+        # spaced-out lowlands reads as a lattice (the user's flight, 2026-11-27: "in my plains
+        # area there should only be one or two rivers"). The wet offset becomes the dry one (every
+        # base channel filled to its bank) with channels carved along the zero-lines of the same
+        # ridge noise at river_scale instead: as many times sparser, with as much larger meanders,
+        # and river_width times wider than the base channels scaled up. The hill gate that keeps
+        # rivers out of ranges (hill_rivers) still applies on top.
+        k = p["river_scale"] / 0.25 * p["river_width"]
+        out[RIVER_R] = {"type": "minecraft:flat_cache", "argument": {
+            "type": "minecraft:shifted_noise", "noise": "terra_continental:parameter/ridge",
+            "xz_scale": p["river_scale"], "y_scale": 0.0, "shift_y": 0.0,
+            "shift_x": {"type": "minecraft:mul", "argument1": 0.5, "argument2": "minecraft:shift_x"},
+            "shift_z": {"type": "minecraft:mul", "argument1": 0.5, "argument2": "minecraft:shift_z"}}}
+        out[RIVER_CHANNEL] = {"type": "minecraft:flat_cache", "argument": linear_spline(
+            {"type": "minecraft:abs", "argument": RIVER_R},
+            [(0.03 * k, 1.0), (0.1 * k, 0.0)], flat_ends=True)}
+        bed = {"type": "minecraft:min", "argument1": OFFSET_DRY, "argument2": p["river_bed"]}
+        out[OFFSET_WET] = {"type": "minecraft:flat_cache", "argument": lerp_to(OFFSET_DRY, bed, RIVER_CHANNEL)}
+        # River biomes follow the new channels: the biome weirdness is pushed out of the river
+        # band (|w| < ~0.05) everywhere, then pulled to 0 along the new channels, so the old
+        # ridge lines stop painting river biome over dry ground.
+        w = "terra_continental:biome_parameter/ridges"
+        gap = {"type": "minecraft:spline", "spline": {"coordinate": w, "points": [
+            {"location": -2.0, "value": -2.0, "derivative": 1.0},
+            {"location": -0.1, "value": -0.15, "derivative": 1.0},
+            {"location": -0.004, "value": -0.1, "derivative": 0.0},
+            {"location": 0.004, "value": 0.1, "derivative": 0.0},
+            {"location": 0.1, "value": 0.15, "derivative": 1.0},
+            {"location": 2.0, "value": 2.0, "derivative": 1.0}]}}
+        out[RIVER_W] = {"type": "minecraft:flat_cache", "argument": lerp_to(gap, 0.0, RIVER_CHANNEL)}
+        for name in (ROUTER_RIDGES, "terra_continental:shape/ridges_high"):
+            body = out.get(name) or reg.df(name)
+            out[name] = replace_refs(copy.deepcopy(body), {w: RIVER_W})
+        if p["river_seam"]:
+            # Lowland rivers as climate seams: the biome humidity steps by +-river_seam across
+            # each new channel (by the river noise's sign), so a broad flat changes biome at its
+            # river, prairie on one bank and forest on the other (the user, 2026-11-27). Only
+            # where the dry ground is low (offset below ~0.15, gone by 0.35): in the hills there
+            # is no river to carry the seam.
+            sw = p["river_seam_width"] * k
+            step = linear_spline(RIVER_R, [(-sw, -1.0), (sw, 1.0)], flat_ends=True)
+            low = linear_spline(OFFSET_DRY, [(0.15, 1.0), (0.35, 0.0)], flat_ends=True)
+            # In the biome router only: the terrain's own region splines read
+            # minecraft:overworld/vegetation, and the seam reads the terrain (a cycle).
+            out[RIVER_VEG] = {"type": "minecraft:add", "argument1": VEGETATION, "argument2": {
+                "type": "minecraft:mul", "argument1": p["river_seam"],
+                "argument2": {"type": "minecraft:mul", "argument1": step, "argument2": low}}}
+            out[ROUTER_VEG] = replace_refs(copy.deepcopy(reg.df(ROUTER_VEG)), {VEGETATION: RIVER_VEG})
+    if p["coast_warp"] is not None:
+        # The continent field's domain warp. continent_base samples vanilla's continentalness at
+        # xz 0.05 and adds the full shift_x/shift_z (+-4 noise units) after scaling: about +-80
+        # blocks in the world at the shift noise's ~32-block wavelength, which frays every coast
+        # into islets, sandbars and lace, and carries the same fray into every biome edge that
+        # reads continentalness (the user's flight, 2026-11-27). coast_warp scales it; inside rare
+        # patches (coast_rugged: the share of a low-frequency mask's range, 0 = none) the full
+        # warp stays, as a ragged stretch of coast.
+        body = copy.deepcopy(reg.df(CONTINENT_BASE))
+        wrapped = body["argument"]["argument1"]["wrapped"]
+        if wrapped.get("shift_x") != "minecraft:shift_x":
+            raise SystemExit(f"{CONTINENT_BASE}'s wrapped noise has no plain shift_x any more")
+        scale = p["coast_warp"]
+        if p["coast_rugged"]:
+            t = mask_threshold(p["coast_rugged"])     # noise values above t are rugged patches
+            out[COAST_RUGGED] = {"type": "minecraft:flat_cache", "argument": linear_spline(
+                {"type": "minecraft:shifted_noise", "noise": "terra_continental:tectonic",
+                 "xz_scale": p["coast_rugged_scale"], "y_scale": 1.0, "shift_x": 0.0,
+                 "shift_y": 7717.0, "shift_z": 0.0},
+                [(t - 0.08, 0.0), (t + 0.08, 1.0)], flat_ends=True)}
+            scale = {"type": "minecraft:add", "argument1": p["coast_warp"], "argument2": {
+                "type": "minecraft:mul", "argument1": 1.0 - p["coast_warp"], "argument2": COAST_RUGGED}}
+        for axis in ("shift_x", "shift_z"):
+            wrapped[axis] = {"type": "minecraft:mul", "argument1": scale, "argument2": "minecraft:" + axis}
+        out[CONTINENT_BASE] = body
     if p["linear_density"]:
         # Density without the kink at the surface: 4 * quarter_negative(v) is 4v in the ground
         # and v in the air, and interpolating across that kink inside the 8-block noise cells lifts

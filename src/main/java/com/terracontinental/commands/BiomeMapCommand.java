@@ -214,6 +214,10 @@ public class BiomeMapCommand {
 
         ThreadLocal<RandomState> perThreadState =
             ThreadLocal.withInitial(() -> RandomState.create(sampled, noiseGetter, seedUsed));
+        // The giants' solver measures this seed's terrain too (the world's own registration wins
+        // for its own seed), or the map would show unsolved giants.
+        com.terracontinental.density.GiantRange.register(overworld, noiseGen,
+            RandomState.create(sampled, noiseGetter, seedUsed), false);
 
         int[] pixels = new int[n * n];
         // Parallel biome-ID grid + palette. Exported alongside the PNG so offline tools can

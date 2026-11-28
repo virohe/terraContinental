@@ -1,0 +1,29 @@
+{
+ "type": "minecraft:flat_cache",
+ "argument": {
+  "type": "minecraft:spline",
+  "spline": {
+   "coordinate": {
+    "type": "minecraft:shifted_noise",
+    "noise": "terra_continental:tectonic",
+    "xz_scale": 0.25,
+    "y_scale": 1.0,
+    "shift_x": 0.0,
+    "shift_y": 7717.0,
+    "shift_z": 0.0
+   },
+   "points": [
+    {
+     "location": 0.26074616969916603,
+     "value": 0.0,
+     "derivative": 0.0
+    },
+    {
+     "location": 0.42074616969916606,
+     "value": 1.0,
+     "derivative": 0.0
+    }
+   ]
+  }
+ }
+}

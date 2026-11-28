@@ -145,9 +145,17 @@ public class TerraContinental {
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.level.LevelEvent.Load e) -> {
             if (e.getLevel() instanceof net.minecraft.server.level.ServerLevel sl
                     && sl.dimension() == net.minecraft.world.level.Level.OVERWORLD) {
+                // First: the plan's own sampling reaches the giants, which the solver measures.
+                com.terracontinental.density.GiantRange.register(sl);
                 com.terracontinental.plan.WorldPlan.get(sl);
                 com.terracontinental.alpine.Alpine.load(sl);
                 com.terracontinental.structure.DryStarts.load(sl);
+            }
+        });
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.level.LevelEvent.Unload e) -> {
+            if (e.getLevel() instanceof net.minecraft.server.level.ServerLevel sl
+                    && sl.dimension() == net.minecraft.world.level.Level.OVERWORLD) {
+                com.terracontinental.density.GiantRange.unregisterAll();
             }
         });
         // Plan the spawn villages off-thread as soon as the server is up (or read the plan kept in the

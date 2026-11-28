@@ -5,6 +5,38 @@ reconstructed on 2026-09-27; everything from
 0.0.1 to 0.7.3 landed in one catch-up commit (`15597b7`) because it had not been committed as
 it happened. Earlier history is in `git log`.
 
+## 0.15.0 — 2026-11-28
+
+The user's flight over the Sinnoh playtest world (2026-11-27): the giant read as a lone dome, lesser
+ranges were too smooth, there were far too many rivers, and shorelines were noisy. Every seed's land
+changes (recipe and screens in `preview/SHAPES.md`).
+
+- **The giant belongs to its range.** It now stands on its continent's broadest range, on the range's
+  centre line, chosen by sampling the range on two rings round each candidate. The range's own ridges
+  climb toward it along a crest spine that ends in a sharp horn. Sister peaks rise along the crest
+  0.6-3 km out, so it reads like the Tetons or the Dolomites (the user: "sisters on a range, not
+  distant cousins"). A continent with no big range gets an 11 km ridge of its own through the summit.
+- **Each giant is solved against the real terrain** (`GiantRange`). It is measured with `getBaseHeight`
+  (the summit, and the ring's highest points 600-3,000 blocks out), then its summit and sisters are
+  adjusted until it stands about 300 blocks over its range. On 8 test seeds every giant now stands
+  265-333 over its range, and 7 pass all four of the user's tests (a clear range of origin, a
+  believable rise, a solid base, clear sisters); before the rework 2 did. A world solves its giants
+  once, in the background as it is created, and keeps the answers in `giants.dat` beside the world
+  plan. The cost is on a new world: the world plan and the spawn-village plan wait for the giants, so
+  on the realgen rig (seed 1742398067288660832) a new world was up in 162 s instead of 33 s (solving
+  took 64 s). Opening it again was 36 s. The solve is deterministic: rebuilt from scratch, the giants
+  came out the same.
+- **Point sampling keeps its column caches.** The world plan, the rare-site search and the village
+  footprints sample the terrain one point at a time, where vanilla's column caches do nothing, and
+  the giant's terms refer to the terrain's base offset several times over. A per-thread column cache
+  stands in for each one there (`PointCache`); the rare-site searches that don't wait on the giants
+  went from 6.7 and 7.3 s to 2.4 and 3.0 s (seed 4151832666630476678).
+- **Rarer jagged ranges.** Rare patches of the lesser ranges are sharpened, kept off the giant.
+- **Fewer rivers.** One or two big rivers per plain instead of many. On wide flats the surface
+  humidity is pushed apart on either side of a river, so a river is where prairie turns to forest.
+- **Smoother shores.** The coastline is smoothed, with ragged stretches only in rare patches, and
+  shore noise no longer drives biome edges.
+
 ## 0.14.3 — 2026-11-27
 
 - **Terrain sampling is about 13 times faster.** Every `NoiseChunk` (one per `getBaseHeight` call and one per

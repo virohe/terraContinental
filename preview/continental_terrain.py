@@ -142,6 +142,124 @@ class TerrainSim(continental_climate.ClimateSim):
             ang = float(noise.get_value(k * 7919.0 + 211.0, 0.0, k * -3571.0 - 59.0)) * 2.0 * np.pi
             px = cx[k] + np.cos(ang) * cr[k] * reach
             pz = cz[k] + np.sin(ang) * cr[k] * reach
+            level = None
+            if "place" in node:
+                px, pz, level = self._giant_place(ctx, node, k, cx[k], cz[k], cr[k], ang)
+            deficit = 0.0
+            if level is not None:
+                # A continent whose best range is too low gets one raised for its giant (the
+                # user, 2026-11-28: "raise its own range" rather than a modest giant): the
+                # crest climbs from the plain as if from a range at level_floor.
+                floor = float(node.get("level_floor", -10.0))
+                deficit = max(0.0, floor - level)
+                level = max(level, floor)
+            if output == "deficit":
+                # How far the range had to be raised: the raised range's body (shape_pack lifts a
+                # broad band along the range line by this much, so it isn't a lone knife-edge).
+                gr = float(node.get("gain_radius", 6000.0))
+                inside = (ctx.X - px) ** 2 + (ctx.Z - pz) ** 2 < gr * gr
+                out = np.where(inside, deficit, out)
+                continue
+            if output in ("raise", "raise_shape"):
+                # The raised range (the user chose "raise its own range", 2026-11-28): on a
+                # continent whose best range stands under level_floor, a ridge raise_length long
+                # through the summit, along the bearing with the most high ground already there,
+                # lifted by the shortfall. Lifting the band along the folded-erosion line instead
+                # gave one tower with sheer seams (v10 views, 4151832666630476678).
+                if deficit <= 0.0:
+                    continue
+                half = 0.5 * float(node.get("raise_length", 9000.0))
+                width = float(node.get("raise_width", 1800.0))
+                axis = self._giant_axis(ctx, node, k, px, pz, half)
+                dx, dz = ctx.X - px, ctx.Z - pz
+                u = dx * np.cos(axis) + dz * np.sin(axis)
+                v = -dx * np.sin(axis) + dz * np.cos(axis)
+                if detail is not None:
+                    # The ridge line wanders and the flanks carry spurs, so it isn't a ruler-
+                    # straight wedge.
+                    v = v + 600.0 * detail.get_value(ctx.X * 0.25, 7307.0 + k, ctx.Z * 0.25)
+                tv = np.clip(np.abs(v) / width, 0.0, 1.0)
+                # Broad shoulders falling off smoothly: a (1 - t)^1.4 wedge left too little high
+                # ground (2.0 km2 over +250 on 4151832666630476678, v16).
+                across = 1.0 - tv * tv * (3 - 2 * tv)
+                tu = np.clip(np.abs(u) / half, 0.0, 1.0)
+                along = 1.0 - tu * tu * (3 - 2 * tu)
+                if detail is not None:
+                    n = detail.get_value(ctx.X * _TEXTURE_SCALE, 7411.0 + k, ctx.Z * _TEXTURE_SCALE)
+                    across = across * (0.75 + 0.5 * (1.0 - np.minimum(np.abs(n) * 2.0, 1.0)))
+                # raise_shape: where the raised range stands, 0-1 (the sisters' weight there).
+                out = out + (1.0 if output == "raise_shape" else deficit) * across * along
+                continue
+            if output == "level":
+                gr = float(node.get("gain_radius", 6000.0))
+                inside = (ctx.X - px) ** 2 + (ctx.Z - pz) ** 2 < gr * gr
+                out = np.where(inside, level, out)
+                continue
+            if output == "ring":
+                # Where the giant's sisters stand: 0 within ~450 blocks of the summit, full from
+                # ~800 to ~2,500, gone by ~3,500.
+                d = np.sqrt((ctx.X - px) ** 2 + (ctx.Z - pz) ** 2)
+                up = np.clip((d - 450.0) / 350.0, 0.0, 1.0)
+                down = np.clip((3500.0 - d) / 1000.0, 0.0, 1.0)
+                out = np.maximum(out, up * up * (3 - 2 * up) * down * down * (3 - 2 * down))
+                continue
+            if output in ("target", "drop", "sisters") and "solve" in node and level is not None:
+                gr = float(node.get("gain_radius", 6000.0))
+                inside = (ctx.X - px) ** 2 + (ctx.Z - pz) ** 2 < gr * gr
+                if not np.any(inside):
+                    if output == "target":
+                        out = np.where(out == 0.0, 10.0, out)
+                    continue
+                tgt, drop = self._giant_solution(ctx, node, k, px, pz, level)
+                if output == "target":
+                    out = np.where(inside, tgt, np.where(out == 0.0, 10.0, out))
+                elif output == "drop":
+                    out = np.where(inside, drop, out)
+                else:
+                    # Whether the sister term is on (the solver's drop is negative when not).
+                    out = np.where(inside, float(drop >= 0.0), out)
+                continue
+            if output == "target":
+                # Range mode: the summit's height as a rise over its own range (the user's 8-seed
+                # review, 2026-11-27: a fixed height left giants too prominent wherever the range
+                # was low, and pressed the ceiling where it was high).
+                tgt = min(float(node.get("target_cap", 1.74)), level + float(node.get("rise", 0.5)))
+                gr = float(node.get("gain_radius", 6000.0))
+                inside = (ctx.X - px) ** 2 + (ctx.Z - pz) ** 2 < gr * gr
+                # Outside every giant's reach the target is far overhead, so a soft cap at it
+                # changes nothing there.
+                out = np.where(inside, tgt, np.where(out == 0.0, 10.0, out))
+                continue
+            if output == "gain":
+                # Range mode: the share of the range's own relief the giant adds, rising toward
+                # the summit along whatever ridges run there (the user, 2026-11-27: the giant
+                # should be part of its range, the ridgeline climbing to it, not a lone dome).
+                gr = float(node.get("gain_radius", 6000.0))
+                gp = float(node.get("gain_power", 2.0))
+                tg = np.sqrt((ctx.X - px) ** 2 + (ctx.Z - pz) ** 2) / gr
+                out = np.maximum(out, np.clip(1.0 - tg, 0.0, None) ** gp)
+                continue
+            if output == "companions":
+                # Range mode: lesser summits close round the giant (the user, 2026-11-27), each a
+                # share (tip) of the way up, as cones of companion_width x radius at
+                # companion_dist x radius out; the strongest wins where two overlap.
+                cr_w = comp_width * radius
+                for j in range(companions):
+                    a_j = (2.0 * np.pi * j / companions
+                           + 1.2 * float(noise.get_value(k * 131.0 + j * 17.0 + 5.0, 0.0, j * -29.0 - 7.0)))
+                    r_j = comp_dist * radius * (0.85 + 0.3 * float(noise.get_value(
+                        k * -83.0 + j * 41.0 - 3.0, 0.0, j * 23.0 + 11.0)))
+                    tip = comp_height * (1.0 - 0.15 * j / max(1, companions - 1))
+                    tc = np.sqrt((ctx.X - px - np.cos(a_j) * r_j) ** 2
+                                 + (ctx.Z - pz - np.sin(a_j) * r_j) ** 2) / cr_w
+                    cone = tip * np.clip(1.0 - tc, 0.0, None) ** summit_power
+                    if detail is not None:
+                        # Ridged, not round: plain cones read as smooth knobs (companion preview,
+                        # 2026-11-27). Ridges ~250 blocks across cut into each flank.
+                        n = detail.get_value(ctx.X * _TEXTURE_SCALE, 8111.0 + 31.0 * j + k, ctx.Z * _TEXTURE_SCALE)
+                        cone = cone * (0.7 + 0.6 * (1.0 - np.minimum(np.abs(n) * 2.0, 1.0)))
+                    out = np.maximum(out, cone)
+                continue
 
             # Each massif's own character (variety, 0-1): with one recipe, every giant on every
             # seed came out alike (the user, 2026-10-24: worlds and continents should have more
@@ -232,6 +350,233 @@ class TerrainSim(continental_climate.ClimateSim):
                 bump = bump + grain * n * np.where(t < 1, np.sin(np.pi * np.clip(t, 0.0, 1.0)), 0.0)
             out += h_k * bump
         return out
+
+    # Range mode placement: a polar grid over the continent's core, then a local refine onto the
+    # ridge. GiantPeaksFunction.place has the same constants.
+    _PLACE_RADII = [0.1 + 0.05 * i for i in range(11)]       # 0.10 .. 0.60 of the radius
+    _PLACE_ANGLES = 36
+    _PLACE_REFINE, _PLACE_STEP = 10, 96.0                    # 21 x 21 points, 96 blocks apart
+
+    def _giant_place(self, ctx, gnode, k, cx, cz, cr, ang0):
+        """Where massif k stands in range mode, and its range's level.
+
+        Candidates on a polar grid out to place_reach of the continent's radius are scored by the
+        mean of `range` (a giant-free offset) over the candidate and a ring of 8 points
+        place_ring blocks out: a big range scores high, a lone hill or a short spur does not
+        (the user's 8-seed review, 2026-11-27: giants placed on the single highest point of the
+        core stood isolated with no range of origin). The best is refined onto the local top of
+        `place`. level = the highest `range` value 600-3,000 blocks from the summit: the crest of
+        the range around it, which the summit's rise is measured from. The angles start at the
+        seeded bearing, so ties go the old way."""
+        place = gnode["place"]
+        rng = gnode.get("range", place)
+        reach = float(gnode.get("place_reach", 0.6))
+        ring = float(gnode.get("place_ring", 0.0))
+        key = (ctx.seed, k, cx, cz, cr, _json.dumps([place, rng, reach, ring, gnode.get("crest_line"),
+                                                     gnode.get("crest_max"), gnode.get("level_q")],
+                                                    sort_keys=True))
+        cache = self.__dict__.setdefault("_place_cache", {})
+        if key in cache:
+            return cache[key]
+
+        def at(node, X, Z):
+            # At whole blocks, as GiantPeaksFunction samples (a block context has integer x, z).
+            node = node if isinstance(node, dict) else self.reg.df(node)
+            c = mc_dfi.Context(ctx.reg, ctx.seed, np.floor(np.asarray(X, float)), np.floor(np.asarray(Z, float)),
+                               custom=ctx.custom)
+            return np.asarray(mc_dfi.evaluate(node, c), float) * np.ones(np.shape(X))
+
+        nr = max(2, int(round((reach - 0.1) / 0.05)) + 1)
+        rr = (0.1 + 0.05 * np.arange(nr))[:, None] * cr
+        aa = ang0 + 2.0 * np.pi * np.arange(self._PLACE_ANGLES)[None, :] / self._PLACE_ANGLES
+        X = (cx + rr * np.cos(aa)).ravel()
+        Z = (cz + rr * np.sin(aa)).ravel()
+        score = at(place, X, Z)
+        if ring:
+            # Two rings, at place_ring and twice it: a broad range scores over a single spine
+            # (v4 screen: giants on narrow ranges stood proud and lonely).
+            ra = 2.0 * np.pi * np.arange(8) / 8.0
+            total = score.copy()
+            for rad in (ring, 2.0 * ring):
+                RX = X[:, None] + rad * np.cos(ra)[None, :]
+                RZ = Z[:, None] + rad * np.sin(ra)[None, :]
+                total = total + at(rng, RX.ravel(), RZ.ravel()).reshape(RX.shape).sum(axis=1)
+            score = total / 17.0
+        if "crest_line" in gnode:
+            # Only on a range's centre line, where the crest that builds the giant exists: a broad
+            # high plateau scored best on one seed and no giant formed (v1 screen, 2026-11-27).
+            off = at(gnode["crest_line"], X, Z) > float(gnode.get("crest_max", 0.08))
+            score = np.where(off, -np.inf, score)
+        i = int(np.argmax(score))
+        bx, bz = float(X[i]), float(Z[i])
+        n = self._PLACE_REFINE
+        g = np.arange(-n, n + 1) * self._PLACE_STEP
+        GZ, GX = np.meshgrid(bz + g, bx + g, indexing="ij")
+        v = at(place, GX.ravel(), GZ.ravel())
+        i = int(np.argmax(v))
+        px, pz = float(np.floor(GX.ravel()[i])), float(np.floor(GZ.ravel()[i]))
+        rd = np.array([600.0, 1000.0, 1500.0, 2000.0, 2500.0, 3000.0])[:, None]
+        la = 2.0 * np.pi * np.arange(48)[None, :] / 48.0
+        ringv = at(rng, (px + rd * np.cos(la)).ravel(), (pz + rd * np.sin(la)).ravel())
+        # A percentile, not the maximum: one lone tall hill set the level on a continent with no
+        # real range, so the range floor never kicked in (v11 screen, 4151832666630476678).
+        q = gnode.get("level_q")
+        level = float(np.percentile(ringv, float(q)) if q is not None else ringv.max())
+        cache[key] = (px, pz, level)
+        return cache[key]
+
+    def _giant_axis(self, ctx, gnode, k, px, pz, half):
+        """The raised range's bearing: of 12, the one whose line through the summit has the most
+        of `range` along it (points at a third and two thirds of half each way), so the new range
+        follows whatever high ground the continent has."""
+        rng = gnode.get("range", gnode["place"])
+        rng = rng if isinstance(rng, dict) else self.reg.df(rng)
+        a = np.pi * np.arange(12) / 12.0
+        s = np.array([-2, -1, 1, 2])[None, :] * half / 3.0
+        X = px + np.cos(a)[:, None] * s
+        Z = pz + np.sin(a)[:, None] * s
+        c = mc_dfi.Context(ctx.reg, ctx.seed, np.floor(X.ravel()), np.floor(Z.ravel()), custom=ctx.custom)
+        v = (np.asarray(mc_dfi.evaluate(rng, c), float) * np.ones(X.size)).reshape(X.shape)
+        return float(a[int(np.argmax(v.mean(axis=1)))])
+
+    # The solver's samples: the summit on a 7 x 7 grid 16 blocks apart, and the ring 600-3,000
+    # blocks out on a 64-block grid, of which the SOLVE_CANDIDATES highest by final offset are
+    # measured, then a 5 x 5 grid 32 apart round the SOLVE_REFINE tallest of those (within the
+    # ring). GiantRange.solve has the same constants and order.
+    _SOLVE_RING, _SOLVE_STEP, _SOLVE_CANDIDATES, _SOLVE_REFINE = (600.0, 3000.0), 64.0, 256, 12
+    _SOLVE_OFFSET = "terra_continental:terrain_spline/offset/continents"
+
+    def _giant_solution(self, ctx, node, k, px, pz, level):
+        """Giant k's summit target and sister drop (offset units), solved against the real
+        terrain so the summit stands `prom` blocks over the highest point 600-3,000 blocks out.
+
+        Prominence came from five interacting terms (the range, the shoulder lift, the crest, the
+        sister lift, crags), so no one recipe suited every seed: nine screens stalled at 4 of 8
+        (2026-11-28). The solver measures instead. With no sister lift it measures the prominence
+        at the default target (level + rise, capped). Too little: the target rises, up to the cap.
+        Too much: the target stays, and the sisters are lifted until the ring's top comes within
+        `prom`, which also gives the giant its sisters. Both are bisections on a quantity the
+        prominence falls or rises with. While a trial runs, this giant's outputs read the trial
+        values (self._trial); nothing else changes, so each trial is one heights() call."""
+        solve = node["solve"]
+        goal = float(solve["prom"])
+        t0 = min(float(solve["cap"]), level + float(solve["rise"]))
+        key = (ctx.seed, k, round(px), round(pz), _json.dumps(solve, sort_keys=True))
+        trial = self.__dict__.setdefault("_trial", {})
+        if key in trial:
+            return trial[key]
+        no_sisters = -1.0         # drop < 0: the sister term is off
+        if trial:
+            # Another giant is being measured: this one stands at its unsolved default, so no
+            # solve depends on the order giants are solved in (two giants 4.9 km apart each
+            # started a solve of the other mid-trial, and in game which went first was down to
+            # thread timing: 4151832666630476678, 2026-11-28).
+            return (t0, no_sisters)
+        cache = self.__dict__.setdefault("_solve_cache", {})
+        if key in cache:
+            return cache[key]
+
+        # 16 apart, within 48: on a 32-block grid the top of a jagged horn was missed by up to ~30
+        # blocks and the giant came out proud (4151832666630476678, 352 for a goal of 305).
+        g = np.arange(-3, 4) * 16.0
+        SZ, SX = np.meshgrid(pz + g, px + g, indexing="ij")
+        lo, hi = self._SOLVE_RING
+        r = np.arange(-hi, hi + 1, self._SOLVE_STEP)
+        RZ, RX = np.meshgrid(pz + r, px + r, indexing="ij")
+        d = np.hypot(RX - px, RZ - pz)
+        sel = (d > lo) & (d < hi)
+        RX, RZ = RX[sel], RZ[sel]
+
+        def measure(t, drop):
+            trial[key] = (t, drop)
+            try:
+                c = mc_dfi.Context(ctx.reg, ctx.seed, RX, RZ, custom=ctx.custom)
+                off = np.asarray(mc_dfi.evaluate(self.reg.df(self._SOLVE_OFFSET), c), float) * np.ones(RX.shape)
+                top = np.argsort(off, kind="stable")[-self._SOLVE_CANDIDATES:]
+                hs = self.heights(ctx.seed, np.rint(SX).astype(np.int64), np.rint(SZ).astype(np.int64))
+                cx_, cz_ = RX[top], RZ[top]
+                hr = self.heights(ctx.seed, np.rint(cx_).astype(np.int64), np.rint(cz_).astype(np.int64))
+                # Round the tallest few on the 32-block grid the summit is measured on: the true
+                # top of a ring peak sits between the 64-block samples, and missing it left giants
+                # 50-90 blocks short of their goal (first game parity run, 4151832666630476678).
+                best = np.argsort(hr, kind="stable")[-self._SOLVE_REFINE:]
+                g = np.arange(-2, 3) * 32.0
+                FX = (cx_[best][:, None, None] + g[None, None, :] + 0.0 * g[None, :, None]).ravel()
+                FZ = (cz_[best][:, None, None] + g[None, :, None] + 0.0 * g[None, None, :]).ravel()
+                fd = np.hypot(FX - px, FZ - pz)
+                keep = (fd > lo) & (fd < hi)
+                hf = self.heights(ctx.seed, np.rint(FX[keep]).astype(np.int64), np.rint(FZ[keep]).astype(np.int64))
+                return float(hs.max() - max(hr.max(), hf.max() if hf.size else hr.max()))
+            finally:
+                del trial[key]
+
+        def closer(a, pa, b, pb):
+            # A value that was measured, the nearer the goal (ties to the first): the prominence
+            # can jump between two close trials as a ledge appears or goes, so the midpoint of the
+            # last bracket, never measured, landed 50 under the goal in game
+            # (4151832666630476678, 2026-11-28).
+            return a if abs(pa - goal) <= abs(pb - goal) else b
+
+        cap = float(solve["cap"])
+        dmin, dmax = float(solve.get("drop_min", 0.05)), float(solve.get("drop_max", 1.5))
+        p0 = measure(t0, no_sisters)
+        result = (t0, no_sisters)
+        t = t0
+        if p0 < goal and t0 < cap:
+            # The ring stands too close under the summit: raise the summit, at most to the cap.
+            p_cap = measure(cap, no_sisters)
+            if p_cap < goal:
+                t = cap
+            else:
+                a, b, pa, pb = t0, cap, p0, p_cap
+                for _ in range(6):
+                    m = 0.5 * (a + b)
+                    pm = measure(m, no_sisters)
+                    if pm < goal:
+                        a, pa = m, pm
+                    else:
+                        b, pb = m, pm
+                result = (closer(a, pa, b, pb), no_sisters)
+        if p0 > goal or (p0 < goal and t == cap):
+            # Proud (the sisters rise) or short at the cap (the ring's highs are pressed down):
+            # the ring's top moves toward t - drop, so the prominence rises with the drop.
+            a, b = dmin, dmax
+            pa = measure(t, a)
+            if pa >= goal:
+                if t < cap:
+                    # Still proud with the sisters as high as they go: the summit comes down, at
+                    # most to level + rise_min (a raised range's giant, 4151832666630476678 at 389).
+                    lo_t, hi_t = level + float(solve.get("rise_min", 0.3)), t
+                    p_lo = measure(lo_t, a)
+                    if p_lo >= goal:
+                        result = (lo_t, a)
+                    else:
+                        p_hi = pa
+                        for _ in range(6):
+                            m = 0.5 * (lo_t + hi_t)
+                            pm = measure(m, a)
+                            if pm > goal:
+                                hi_t, p_hi = m, pm
+                            else:
+                                lo_t, p_lo = m, pm
+                        result = (closer(lo_t, p_lo, hi_t, p_hi), a)
+                else:
+                    result = (t, a)
+            else:
+                pb = measure(t, b)
+                if pb <= goal:
+                    result = (t, b)
+                else:
+                    for _ in range(6):
+                        m = 0.5 * (a + b)
+                        pm = measure(t, m)
+                        if pm < goal:
+                            a, pa = m, pm
+                        else:
+                            b, pb = m, pm
+                    result = (t, closer(a, pa, b, pb))
+        cache[key] = result
+        return result
 
     @property
     def min_y(self):

@@ -69,12 +69,23 @@ public final class GiantPeaksFunction implements DensityFunction {
     private final double variety;
     private final Optional<NoiseHolder> detailNoise;
     private final boolean mask;
+    /** Range mode (place present): where each giant stands, and the range outputs. */
+    private final GiantRange.Mode mode;
+    private final int out;
 
     private volatile Massif[] peaks;
+    private volatile GiantRange.Placed[] placed;
+    private volatile GiantRange.World world;
+
+    private GiantRange.World world() {
+        GiantRange.World w = world;
+        if (w == null) world = w = GiantRange.World.of(jitterNoise.noise());
+        return w;
+    }
 
     public static final MapCodec<GiantPeaksFunction> CODEC = RecordCodecBuilder.mapCodec(instance ->
             instance.group(
-                    Source.CODEC.forGetter(f -> new Source(f.jitterNoise, f.continents)),
+                    Source.CODEC.forGetter(f -> new Source(f.jitterNoise, f.continents, f.mode)),
                     Codec.DOUBLE.fieldOf("height").forGetter(f -> f.height),
                     Codec.DOUBLE.optionalFieldOf("radius", 2400.0).forGetter(f -> f.radius),
                     Codec.DOUBLE.optionalFieldOf("reach", 0.35).forGetter(f -> f.reach),
@@ -115,7 +126,23 @@ public final class GiantPeaksFunction implements DensityFunction {
         this.variety = variety;
         this.detailNoise = detailNoise;
         this.mask = "mask".equals(output);
+        this.mode = source.mode();
+        this.out = switch (output) {
+            case "gain" -> GAIN;
+            case "target" -> TARGET;
+            case "drop" -> DROP;
+            case "sisters" -> SISTERS;
+            case "level" -> LEVEL;
+            case "deficit" -> DEFICIT;
+            case "ring" -> RING;
+            case "raise" -> RAISE;
+            case "raise_shape" -> RAISE_SHAPE;
+            default -> HEIGHT;
+        };
     }
+
+    private static final int HEIGHT = 0, GAIN = 1, TARGET = 2, DROP = 3, SISTERS = 4, LEVEL = 5, DEFICIT = 6,
+            RING = 7, RAISE = 8, RAISE_SHAPE = 9;
 
     /**
      * One massif: where it stands and its own character. {@code comps} holds {x, z, cone amplitude}
@@ -127,9 +154,48 @@ public final class GiantPeaksFunction implements DensityFunction {
     }
 
     /** Every continent's massif: the spawn continent first, then the extra ones. */
+    /**
+     * Every node's massifs, per world and per the settings they depend on: each NoiseChunk (one per
+     * getBaseHeight call, one per chunk) maps the router into new instances, and range-mode
+     * placement samples thousands of points, so it is worked out once per world, not per instance.
+     */
+    private record PeaksKey(GiantRange.World world, double height, double radius, double reach, double summit,
+                            double summitWidth, double summitPower, Companions companions, double variety,
+                            double spurs, boolean steered, GiantRange.Sig sig) {
+    }
+
+    private static final java.util.Map<PeaksKey, Object[]> PEAKS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private PeaksKey peaksKey() {
+        return new PeaksKey(world(), height, radius, reach, summit, summitWidth, summitPower, companions, variety,
+                spurs, continents.isPresent(), mode.sig());
+    }
+
+    /**
+     * True once this world's massifs for this node are worked out: the placement functions are not
+     * needed any more, so copies stop wrapping them. Every NoiseChunk (one per getBaseHeight call)
+     * maps the whole router, and 17 giant nodes each carrying three copies of the terrain's offset
+     * made getBaseHeight about 10 times slower (rig, 2026-11-28: rare-site search 86 s, was 9 s).
+     */
+    private boolean placedKnown() {
+        return mode.on() && jitterNoise.noise() != null && PEAKS.containsKey(peaksKey());
+    }
+
+    /** Works out this node's massifs now (GiantRange.register does it before anything generates). */
+    void place() {
+        peaks();
+    }
+
     private Massif[] peaks() {
         Massif[] p = peaks;
         if (p == null) {
+            PeaksKey key = peaksKey();
+            Object[] hit = PEAKS.get(key);
+            if (hit != null) {
+                placed = (GiantRange.Placed[]) hit[1];
+                peaks = (Massif[]) hit[0];
+                return peaks;
+            }
             double centralRadius = 14500.0, spread = 60000.0, contRadius = 14000.0;
             int extra = 5;
             try {
@@ -149,6 +215,7 @@ public final class GiantPeaksFunction implements DensityFunction {
                 centers = java.util.Arrays.copyOfRange(all, 1, all.length);
             }
             p = new Massif[centers.length + 1];
+            GiantRange.Placed[] where = mode.on() ? new GiantRange.Placed[p.length] : null;
             for (int k = 0; k <= centers.length; k++) {
                 double cx = k == 0 ? 0.0 : centers[k - 1][0];
                 double cz = k == 0 ? 0.0 : centers[k - 1][1];
@@ -157,6 +224,13 @@ public final class GiantPeaksFunction implements DensityFunction {
                 double angle = jitterNoise.getValue(k * 7919.0 + 211.0, 0.0, k * -3571.0 - 59.0) * 2.0 * Math.PI;
                 double px = cx + Math.cos(angle) * cr * reach;
                 double pz = cz + Math.sin(angle) * cr * reach;
+                if (where != null) {
+                    // Range mode: on the continent's broadest range (the user's 8-seed review,
+                    // 2026-11-27: placed by bearing, giants stood with no range of origin).
+                    where[k] = GiantRange.place(world(), k, cx, cz, cr, angle, mode);
+                    px = where[k].x();
+                    pz = where[k].z();
+                }
 
                 // Each massif's own character (variety, 0-1): with one recipe, every giant on every
                 // seed came out alike (the user, 2026-10-24: worlds and continents should have more
@@ -202,7 +276,9 @@ public final class GiantPeaksFunction implements DensityFunction {
                 }
                 p[k] = new Massif(px, pz, h, rad, sm, sw, sp, spk, el, ca, sa, comps);
             }
+            placed = where;
             peaks = p;
+            PEAKS.putIfAbsent(key, new Object[]{p, where});
         }
         return p;
     }
@@ -220,6 +296,9 @@ public final class GiantPeaksFunction implements DensityFunction {
     public double compute(FunctionContext ctx) {
         double x = ctx.blockX(), z = ctx.blockZ();
         Massif[] all = peaks();
+        if (out != HEIGHT && !mask) {
+            return rangeOutput(x, z);
+        }
         NoiseHolder detail = detailNoise.orElse(null);
         double warpReach = 1.0 + Math.abs(warp) * (detail == null ? 0.0 : detail.maxValue());
         double sum = 0.0;
@@ -287,6 +366,118 @@ public final class GiantPeaksFunction implements DensityFunction {
         return sum;
     }
 
+    /** The range-mode outputs (previewer: _giant_peaks' outputs other than height and mask). */
+    private double rangeOutput(double x, double z) {
+        GiantRange.Placed[] where = placed;
+        if (where == null) {
+            return out == TARGET ? 10.0 : 0.0;
+        }
+        NoiseHolder detail = detailNoise.orElse(null);
+        double gr = mode.gainRadius();
+        double v = 0.0;
+        for (int k = 0; k < where.length; k++) {
+            GiantRange.Placed p = where[k];
+            double dx = x - p.x(), dz = z - p.z();
+            double d2 = dx * dx + dz * dz;
+            boolean inside = d2 < gr * gr;
+            switch (out) {
+                case GAIN -> {
+                    // The share of the range's own relief the giant adds, rising toward the summit
+                    // (the user, 2026-11-27: the giant should be part of its range).
+                    double t = Math.sqrt(d2) / gr;
+                    v = Math.max(v, Math.pow(Math.max(0.0, 1.0 - t), mode.gainPower()));
+                }
+                case RING -> {
+                    // Where the sisters stand: none within ~450 blocks, full ~800-2,500, gone by 3,500.
+                    double d = Math.sqrt(d2);
+                    double up = Math.min(Math.max((d - 450.0) / 350.0, 0.0), 1.0);
+                    double down = Math.min(Math.max((3500.0 - d) / 1000.0, 0.0), 1.0);
+                    v = Math.max(v, up * up * (3 - 2 * up) * down * down * (3 - 2 * down));
+                }
+                case LEVEL -> {
+                    if (inside) v = p.level();
+                }
+                case DEFICIT -> {
+                    if (inside) v = p.deficit();
+                }
+                case RAISE, RAISE_SHAPE -> {
+                    // The raised range (the user chose "raise its own range", 2026-11-28): a ridge
+                    // raise_length long through the summit, along the bearing with the most high
+                    // ground, lifted by the shortfall; RAISE_SHAPE is its 0-1 footprint.
+                    if (p.deficit() <= 0.0) continue;
+                    double half = 0.5 * mode.raiseLength();
+                    double w = mode.raiseWidth();
+                    // Past this the ridge is zero whatever the wander noise does (|wander| <= ~600).
+                    double reachR = half + w + 700.0;
+                    if (d2 >= reachR * reachR) continue;
+                    double axis = GiantRange.axis(world(), k, p, mode);
+                    double u = dx * Math.cos(axis) + dz * Math.sin(axis);
+                    double c = -dx * Math.sin(axis) + dz * Math.cos(axis);
+                    if (detail != null) {
+                        // The ridge line wanders, so it isn't a ruler-straight wedge.
+                        c += 600.0 * detail.getValue(x * 0.25, 7307.0 + k, z * 0.25);
+                    }
+                    double tv = Math.min(Math.abs(c) / w, 1.0);
+                    double across = 1.0 - tv * tv * (3 - 2 * tv);
+                    double tu = Math.min(Math.abs(u) / half, 1.0);
+                    double along = 1.0 - tu * tu * (3 - 2 * tu);
+                    if (detail != null) {
+                        double n = detail.getValue(x * TEXTURE_SCALE, 7411.0 + k, z * TEXTURE_SCALE);
+                        across *= 0.75 + 0.5 * (1.0 - Math.min(Math.abs(n) * 2.0, 1.0));
+                    }
+                    v += (out == RAISE_SHAPE ? 1.0 : p.deficit()) * across * along;
+                }
+                default -> {
+                    // TARGET, DROP, SISTERS. Outside every giant's reach the target is far
+                    // overhead, so a cap at it changes nothing there.
+                    if (!inside) {
+                        if (out == TARGET && v == 0.0) v = 10.0;
+                        continue;
+                    }
+                    double tgt, drop;
+                    if (mode.solve().isPresent()) {
+                        double[] s = GiantRange.solution(world(), k, p, mode.solve().get());
+                        tgt = s[0];
+                        drop = s[1];
+                    } else {
+                        // The summit as a rise over its own range (the user's 8-seed review).
+                        tgt = Math.min(mode.targetCap(), p.level() + mode.rise());
+                        drop = GiantRange.NO_SISTERS;
+                    }
+                    v = out == TARGET ? tgt : out == DROP ? drop : (drop >= 0.0 ? 1.0 : 0.0);
+                }
+            }
+        }
+        return v;
+    }
+
+    /** Solves every giant this node reaches, the spawn giant first (GiantRange.presolve). */
+    void presolve() {
+        if (mode.solve().isEmpty()) return;
+        peaks();
+        GiantRange.Placed[] where = placed;
+        if (where == null) return;
+        // The spawn giant first (the spawn area needs it), then the rest side by side: one after
+        // another they took 94 s on the rig, and the world plan waits on all of them.
+        GiantRange.solution(world(), 0, where[0], mode.solve().get());
+        java.util.concurrent.CompletableFuture<?>[] rest = new java.util.concurrent.CompletableFuture<?>[where.length - 1];
+        for (int k = 1; k < where.length; k++) {
+            int kk = k;
+            rest[k - 1] = java.util.concurrent.CompletableFuture.runAsync(
+                    () -> GiantRange.solution(world(), kk, where[kk], mode.solve().get()),
+                    r -> {
+                        Thread t = new Thread(r, "Terra Continental giant presolve " + kk);
+                        t.setDaemon(true);
+                        t.start();
+                    });
+        }
+        java.util.concurrent.CompletableFuture.allOf(rest).join();
+    }
+
+    boolean solves() {
+        return mode.solve().isPresent();
+    }
+
     @Override
     public void fillArray(double[] array, ContextProvider contextProvider) {
         contextProvider.fillAllDirectly(array, this);
@@ -295,15 +486,20 @@ public final class GiantPeaksFunction implements DensityFunction {
     @Override
     public DensityFunction mapAll(Visitor visitor) {
         return visitor.apply(new GiantPeaksFunction(
-                new Source(visitor.visitNoise(jitterNoise), continents.map(df -> df.mapAll(visitor))), height, radius, reach, output,
+                new Source(visitor.visitNoise(jitterNoise), continents.map(df -> df.mapAll(visitor)),
+                        placedKnown() ? mode : mode.map(visitor)),
+                height, radius, reach, output,
                 maskReach, warp, spurs, texture, grain, summit, summitWidth, summitPower, companions, variety,
                 detailNoise.map(visitor::visitNoise)));
     }
 
     @Override
     public double minValue() {
-        if (mask) {
+        if (mask || out == GAIN || out == RING || out == SISTERS || out == RAISE || out == RAISE_SHAPE) {
             return 0.0;
+        }
+        if (out != HEIGHT) {
+            return -1000.0;
         }
         double n = detailNoise.map(NoiseHolder::maxValue).orElse(0.0);
         return -2.0 * Math.abs(height) * (Math.abs(texture) + Math.abs(grain)) * n;
@@ -311,8 +507,12 @@ public final class GiantPeaksFunction implements DensityFunction {
 
     @Override
     public double maxValue() {
-        if (mask) {
+        if (mask || out == GAIN || out == RING || out == SISTERS) {
             return 1.0;
+        }
+        if (out != HEIGHT) {
+            // Wide on purpose: vanilla's min/max shortcuts must never fire on these.
+            return 1000.0;
         }
         double n = detailNoise.map(NoiseHolder::maxValue).orElse(0.0);
         // Two massifs can overlap only on touching continents.
@@ -325,11 +525,12 @@ public final class GiantPeaksFunction implements DensityFunction {
      * {@code companion_width} of the massif's radius wide, {@code companion_dist} of it out. A
      * separate record because a codec group holds at most 16 fields.
      */
-    /** The jitter noise, and where to find the continent layout; nested so the codec stays at 16 fields. */
-    public record Source(NoiseHolder jitterNoise, Optional<DensityFunction> continents) {
+    /** The jitter noise, where to find the continent layout, and range mode; nested so the codec stays at 16 fields. */
+    public record Source(NoiseHolder jitterNoise, Optional<DensityFunction> continents, GiantRange.Mode mode) {
         static final MapCodec<Source> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 NoiseHolder.CODEC.fieldOf("jitter_noise").forGetter(Source::jitterNoise),
-                DensityFunction.HOLDER_HELPER_CODEC.optionalFieldOf("continents").forGetter(Source::continents)
+                DensityFunction.HOLDER_HELPER_CODEC.optionalFieldOf("continents").forGetter(Source::continents),
+                GiantRange.Mode.CODEC.forGetter(Source::mode)
         ).apply(instance, Source::new));
     }
 

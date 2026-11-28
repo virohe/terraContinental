@@ -5,6 +5,57 @@
 Recipes for `shape_pack.py`. Packs are written under `preview/out/` (not in git), so this file is
 what makes a candidate reproducible. Targets: `docs/decisions.md`, 2026-10-23.
 
+## Ranges, rivers, coast and the solved giant (2026-11-28, in the pack)
+
+From the user's Sinnoh flight (2026-11-27): the giant read as a lone dome, lesser ranges were too
+smooth, rivers too many, shorelines too noisy. This recipe, applied over the 0.14.3 pack, is what the
+pack now carries (it replaces the giant and the seam's river and coast keys already there):
+
+```bash
+python preview/shape_pack.py preview/out/packs/v17 coast_warp=0.15 coast_rugged=0.12 river_scale=0.06 river_seam=0.6 giant_height=0.08 giant_radius=900 giant_variety=0 giant_warp=0.12 giant_spurs=0.6 giant_texture=0.03 giant_summit_power=1.8 giant_mode=range giant_crest=1.0 giant_crest_width=0.15 giant_crest_power=1.3 range_jag=3.0 giant_mask_radius=2000 giant_crest_gain_power=1.5 giant_place_ring=1500 giant_place_reach=1.0 giant_gain=0.3 giant_gain_radius=6000 giant_horn=0.15 giant_horn_radius=1500 giant_sisters=0.6 giant_sisters_clear=600 giant_target_cap=1.85 giant_rise=0.75 giant_sister_lift=0.8 giant_sister_drop=0.5 giant_sister_band=0.6 giant_level_floor=1.0 giant_raise_width=0.4 giant_raise_ridge=3000 giant_raise_length=11000 giant_solve=305 giant_sister_crest=0.3
+```
+
+- **Coast**: `coast_warp` smooths the shoreline; `coast_rugged` brings back ragged stretches in rare
+  patches (`mask_threshold`: `terra_continental:tectonic` as a 2-D mask has sd ~0.29, not 1).
+- **Rivers**: `river_scale` 0.06 leaves one or two big rivers per plain; `river_seam` pushes the
+  surface humidity apart on either side of them (`shape/vegetation_rivers`, router only), so on wide
+  flats a river is where the biome changes.
+- **Jagged ranges**: `range_jag` sharpens rare patches of the lesser ranges, kept off the giant.
+- **The giant on its range** (`giant_mode=range`): placed on the continent's broadest range (two
+  rings of `range` round each candidate, on the range's centre line), it lifts the range's own relief
+  toward it, climbs a crest spine to a horn, and gets sisters on the crest 0.6-3 km out.
+- **The solver** (`giant_solve` 305): each giant's summit target and sister drop are solved against
+  real heights (`getBaseHeight` at the summit and the 256 highest ring points by offset) so it stands
+  ~290-310 blocks over the highest point 600-3,000 blocks out. Nine hand-tuned screens stalled at
+  4 of 8 seeds: prominence comes from five interacting terms and crags add +-100 blocks the offset
+  can't see. In game, `GiantRange` solves each giant once, in the background, on first need; trials
+  are visible only to the solver's threads.
+- **Raised range** (`giant_level_floor` 1.0, `giant_raise_ridge` 3000 x `giant_raise_length` 11000):
+  a continent whose best range is low gets an 11 km ridge of its own through the summit, along the
+  bearing with the most high ground. Sisters are weighted by being on a range line or that ridge
+  (`giant_sister_crest`), not by each point's own height, which turned knobs into cliff rings.
+
+Screen (`giant_metrics` thresholds from the user's review: prominence 230-340, 4+ sister peaks
+within 600, base 0.8 km2 within 700 of the summit, 3 km2 of range over +250, under the ceiling), 8
+seeds: prominence 265-333 on all 8, 7 pass every test; 12345 counts 3 sisters and 2.7 km2 of range
+(it read fine by eye). Before the rework: 2 of 8 by the user's eye.
+
+How the solver measures, and why (each found on the rig with `tools/python/giant_parity.py`):
+- The ring's top: the 256 highest ring points by offset on a 64-block grid, then a 5 x 5 grid 32
+  apart round the 12 tallest; the summit on a 7 x 7 grid 16 apart. Coarser, it missed the real tops
+  and giants came out 50-90 blocks off their goal.
+- It returns a value it measured (the bracket end nearer the goal), never the midpoint: the
+  prominence can jump ~70 blocks between two close trials as a ledge on a knife crest appears.
+- While one giant is measured, the others stand at their unsolved defaults, so no solve depends on
+  the order giants are solved in (two giants 4.9 km apart, 4151832666630476678).
+
+Game vs previewer (4151832666630476678, 40,401 heights round the spawn giant): with the game's
+solution forced into the previewer, 97.6% of land exact and 99.6% within 16, the pack's usual
+parity. Each side solves on its own heights, though, and a few points on the horn's flank stand
+~180 higher in game (3-D noise on a knife crest), so the game picks a different sister drop (0.548
+vs 0.390): its sisters stand up to ~110 lower near the summit than the preview shows. The game's own
+giant passes the tests (prominence 287); the preview's does too (261). The game is the reference.
+
 ## blend2 (current candidate, 2026-10-23)
 
 ```bash

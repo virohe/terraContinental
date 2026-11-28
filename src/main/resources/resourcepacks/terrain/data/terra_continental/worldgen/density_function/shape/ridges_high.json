@@ -4,7 +4,7 @@
   "type": "minecraft:add",
   "argument1": {
    "type": "minecraft:mul",
-   "argument1": "terra_continental:biome_parameter/ridges",
+   "argument1": "terra_continental:shape/ridges_rivers",
    "argument2": {
     "type": "minecraft:add",
     "argument1": 1.0,
@@ -37,7 +37,7 @@
    "argument1": {
     "type": "minecraft:spline",
     "spline": {
-     "coordinate": "terra_continental:biome_parameter/ridges",
+     "coordinate": "terra_continental:shape/ridges_rivers",
      "points": [
       {
        "location": -2.0,

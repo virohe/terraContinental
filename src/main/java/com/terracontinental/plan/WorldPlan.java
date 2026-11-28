@@ -218,6 +218,15 @@ public final class WorldPlan implements PlanPreview {
             @Override
             public DensityFunction apply(DensityFunction df) {
                 // depth is 2-D plus a y gradient: no BlendedNoise or End islands to reseed.
+                // Column caches keep their value here too (PointCache): one per marker, shared by
+                // every reference to it.
+                if (df instanceof net.minecraft.world.level.levelgen.DensityFunctions.MarkerOrMarked m) {
+                    // Marker.Type is protected: compared by its constant's name.
+                    String type = ((Enum<?>) (Object) m.type()).name();
+                    if (type.equals("FlatCache") || type.equals("Cache2D")) {
+                        return wrapped.computeIfAbsent(df, d -> new PointCache(m.wrapped()));
+                    }
+                }
                 return wrapped.computeIfAbsent(df, d -> d);
             }
         });

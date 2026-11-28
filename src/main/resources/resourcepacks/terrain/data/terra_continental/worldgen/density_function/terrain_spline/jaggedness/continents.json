@@ -3,60 +3,203 @@
  "argument": {
   "type": "minecraft:cache_2d",
   "argument": {
-   "type": "minecraft:add",
+   "type": "minecraft:mul",
    "argument1": {
-    "type": "minecraft:mul",
+    "type": "minecraft:add",
     "argument1": {
-     "type": "minecraft:spline",
-     "spline": {
-      "coordinate": "terra_continental:shape/continents",
-      "points": [
-       {
-        "location": 0,
-        "derivative": 0,
-        "value": 0
-       },
-       {
-        "location": 0.175,
-        "derivative": 0,
-        "value": {
-         "coordinate": "terra_continental:shape/erosion_folded",
+     "type": "minecraft:mul",
+     "argument1": {
+      "type": "minecraft:spline",
+      "spline": {
+       "coordinate": "terra_continental:shape/continents",
+       "points": [
+        {
+         "location": 0,
+         "derivative": 0,
+         "value": 0
+        },
+        {
+         "location": 0.175,
+         "derivative": 0,
+         "value": {
+          "coordinate": "terra_continental:shape/erosion_folded",
+          "points": [
+           {
+            "location": 0.0,
+            "derivative": 0,
+            "value": 0.65
+           },
+           {
+            "location": 0.125,
+            "derivative": 0,
+            "value": 0
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     "argument2": 0.6
+    },
+    "argument2": {
+     "type": "minecraft:mul",
+     "argument1": 0.6,
+     "argument2": {
+      "type": "terra_continental:giant_peaks",
+      "continents": "terra_continental:continent_base",
+      "height": 2.0,
+      "radius": 2000,
+      "reach": 0.35,
+      "jitter_noise": "terra_continental:continent_jitter",
+      "warp": 0.12,
+      "spurs": 0.35,
+      "texture": 0.04,
+      "detail_noise": "terra_continental:tectonic",
+      "variety": 1.0,
+      "output": "mask",
+      "mask_reach": 0.3,
+      "place": {
+       "type": "minecraft:add",
+       "argument1": "terra_continental:shape/offset_dry",
+       "argument2": {
+        "type": "minecraft:spline",
+        "spline": {
+         "coordinate": {
+          "type": "minecraft:abs",
+          "argument": "terra_continental:shape/erosion_folded"
+         },
          "points": [
           {
            "location": 0.0,
-           "derivative": 0,
-           "value": 0.65
+           "value": 0.3,
+           "derivative": 0.0
           },
           {
-           "location": 0.125,
-           "derivative": 0,
-           "value": 0
+           "location": 0.05,
+           "value": 0.0,
+           "derivative": 0.0
           }
          ]
         }
        }
-      ]
+      },
+      "range": "terra_continental:shape/offset_dry",
+      "place_reach": 1.0,
+      "place_ring": 1500,
+      "crest_line": {
+       "type": "minecraft:abs",
+       "argument": "terra_continental:shape/erosion_folded"
+      },
+      "crest_max": 0.08,
+      "level_floor": 1.0,
+      "solve": {
+       "prom": 305,
+       "rise": 0.75,
+       "cap": 1.85
+      }
      }
-    },
-    "argument2": 0.6
+    }
    },
    "argument2": {
-    "type": "minecraft:mul",
-    "argument1": 0.6,
+    "type": "minecraft:add",
+    "argument1": 1.0,
     "argument2": {
-     "type": "terra_continental:giant_peaks",
-     "continents": "terra_continental:continent_base",
-     "height": 2.0,
-     "radius": 2400.0,
-     "reach": 0.35,
-     "jitter_noise": "terra_continental:continent_jitter",
-     "warp": 0.12,
-     "spurs": 0.35,
-     "texture": 0.04,
-     "detail_noise": "terra_continental:tectonic",
-     "variety": 1.0,
-     "output": "mask",
-     "mask_reach": 0.3
+     "type": "minecraft:mul",
+     "argument1": 3.0,
+     "argument2": {
+      "type": "minecraft:mul",
+      "argument1": {
+       "type": "minecraft:spline",
+       "spline": {
+        "coordinate": {
+         "type": "minecraft:shifted_noise",
+         "noise": "terra_continental:tectonic",
+         "xz_scale": 0.5,
+         "y_scale": 1.0,
+         "shift_x": 0.0,
+         "shift_y": 9341.0,
+         "shift_z": 0.0
+        },
+        "points": [
+         {
+          "location": 0.2205656829531989,
+          "value": 0.0,
+          "derivative": 0.0
+         },
+         {
+          "location": 0.3805656829531989,
+          "value": 1.0,
+          "derivative": 0.0
+         }
+        ]
+       }
+      },
+      "argument2": {
+       "type": "minecraft:add",
+       "argument1": 1.0,
+       "argument2": {
+        "type": "minecraft:mul",
+        "argument1": -1.0,
+        "argument2": {
+         "type": "terra_continental:giant_peaks",
+         "height": 0.08,
+         "radius": 900,
+         "reach": 0.35,
+         "jitter_noise": "terra_continental:continent_jitter",
+         "continents": "terra_continental:continent_base",
+         "warp": 0.12,
+         "spurs": 0.6,
+         "texture": 0.03,
+         "detail_noise": "terra_continental:tectonic",
+         "summit": 0.35,
+         "summit_width": 0.3333,
+         "summit_power": 1.8,
+         "output": "mask",
+         "mask_reach": 2.0,
+         "place": {
+          "type": "minecraft:add",
+          "argument1": "terra_continental:shape/offset_dry",
+          "argument2": {
+           "type": "minecraft:spline",
+           "spline": {
+            "coordinate": {
+             "type": "minecraft:abs",
+             "argument": "terra_continental:shape/erosion_folded"
+            },
+            "points": [
+             {
+              "location": 0.0,
+              "value": 0.3,
+              "derivative": 0.0
+             },
+             {
+              "location": 0.05,
+              "value": 0.0,
+              "derivative": 0.0
+             }
+            ]
+           }
+          }
+         },
+         "range": "terra_continental:shape/offset_dry",
+         "place_reach": 1.0,
+         "place_ring": 1500,
+         "crest_line": {
+          "type": "minecraft:abs",
+          "argument": "terra_continental:shape/erosion_folded"
+         },
+         "crest_max": 0.08,
+         "level_floor": 1.0,
+         "solve": {
+          "prom": 305,
+          "rise": 0.75,
+          "cap": 1.85
+         }
+        }
+       }
+      }
+     }
     }
    }
   }
